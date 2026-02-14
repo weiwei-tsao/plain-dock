@@ -1,0 +1,172 @@
+# ============================================================
+# TECHNICAL ARCHITECTURE DOCUMENT - PlainDock v1.4
+# Based on PRD v1.7 | Final Code-Level Locked
+# Date: 2026-02-13
+# ============================================================
+
+1. 系统架构 (SYSTEM ARCHITECTURE)
+------------------------------------------------------------
+架构类型：单体全栈 (Next.js Monolith)
+部署容器：Docker (Alpine Linux)
+
+[ Client Browser ]
+      |
+      | HTTPS / JSON (API)
+      | Secure Cookie (JWT)
+      v
++---------------------------------------------------------------+
+|                 Docker Container (Next.js)                    |
+|                                                               |
+|   1. Presentation Layer (Frontend)                            |
+|      - App Router (/app): UI Layouts & Pages                  |
+|      - Client State: React State + Request Queue (No Redux)   |
+|      - **Constraint**: Sanitizer logic runs HERE (Client Only)|
+|                                                               |
+|   2. Processing Layer (The "Engines")                         |
+|      - Sanitization Engine: String-based processing BEFORE    |
+|        Tiptap/Textarea insertion.                             |
+|      - Queue Engine: Per-note serial request queue (Dedupe).  |
+|                                                               |
+|   3. Service Layer (Backend API)                              |
+|      - Middleware: Global Guard (Static Assets Whitelisted)   |
+|      - API Routes: RESTful endpoints (Sorted Response)        |
+|                                                               |
+|   4. Data Layer (Persistence)                                 |
+|      - Prisma Client: Type-safe ORM                           |
+|      - SQLite: Embedded DB                                    |
+|      - **Constraint**: WAL Mode + 'server-only' enforcement   |
++---------------------------------------------------------------+
+
+2. 关键数据流与实现约束 (CRITICAL IMPLEMENTATION DETAILS)
+------------------------------------------------------------
+
+A. 粘贴清洗流 (Paste Pipeline - Rich Mode):
+   *约束：空HTML判定；String层清洗；光标处插入；Client Only*
+
+   [User Cmd+V] -> [Tiptap onPaste Interceptor]
+        |
+   [Step 1: Raw Extraction]
+        |--> Let html = event.clipboardData.getData('text/html')
+        |--> **Check**: If (html.trim() === '') use 'text/plain' fallback
+        |--> **Constraint**: text/plain fallback MUST normalize `\r\n` -> `\n` BEFORE wrapping.
+        |
+   [Step 2: String Processing (src/lib/sanitizer/)]
+        |--> **Constraint**: Must run in Client Component / Hook
+        |--> Run DOMPurify (Config: allowlist p/br/strong/etc, strip on*)
+        |--> **Rel Merge**: Set Union -> existingRelTokens ∪ {noopener, noreferrer}
+        |--> Run Regex/Parser (Normalize: div->p, flatten tables)
+        |--> Run Downgrade (Strip unauthorized styles)
+        |
+   [Step 3: Insertion (Cursor Position)]
+        |--> **Command**: editor.commands.insertContentAt(editor.state.selection, cleanHTML)
+        |--> **Constraint**: Must use FRESH `editor.state.selection` (do not cache in closure).
+        |--> Tiptap updates Document Model
+
+B. 保存与并发流 (Save Pipeline & Concurrency):
+   *约束：前端队列串行化 + 去重；模式切换共享队列*
+
+   [Trigger: Debounce 1s / Cmd+S / Mode Switch]
+        |
+   [Frontend Request Queue] (Keyed by Note ID)
+        |--> **Deduplication**: Compare fields {title, content, textContent, mode, isPinned}
+        |    If (newPayload == queue.tail.payload) -> Drop Request
+        |--> State: IDLE -> SAVING
+        |--> Push Payload: { content, textContent, mode, title }
+        |--> Await Previous Request (Strict Serial execution)
+        |
+   [Network Request]
+        |--> PUT /api/notes/:id
+        |
+   [Success Branch]                [Failure Branch]
+        |--> State: SAVED               |--> State: FAILED
+        |--> Update LastSavedAt         |--> UI: Show "Save Failed" (Red)
+                                        |--> Action: Keep dirty data in memory
+                                        |--> Retry: User click re-sends queue
+
+C. 数据库初始化 (Database Init):
+   *约束：显式开启 WAL；防止 Client 端误引用*
+
+   [db.ts Initialization]
+        |--> **Constraint**: Add `import 'server-only'` at top of file
+        |--> const prisma = new PrismaClient()
+        |--> **Action**: prisma.$executeRaw`PRAGMA journal_mode = WAL;`
+        |--> **Constraint**: Must be idempotent/fault-tolerant (try-catch ignore error).
+        |--> Export singleton instance
+
+D. 认证边界 (Auth Boundary):
+   *约束：Middleware 白名单覆盖所有静态资源；区分 API/Page 响应*
+
+   [Middleware.ts]
+        |--> **Allow List**: 
+        |      /login, /api/auth/*, /_next/*, /favicon.ico
+        |      /robots.txt, /sitemap.xml, /manifest.json, /icons/*
+        |--> **Protect**: Everything else (e.g., /, /api/notes/*)
+        |--> Logic: No Token? 
+        |      If (path.startsWith('/api/')) -> Return 401 JSON
+        |      Else -> Redirect('/login')
+
+3. API 接口定义 (API SPECIFICATION)
+------------------------------------------------------------
+遵循 RESTful 规范。**List 接口默认排序** 以保证前后端一致性。
+
+[ Auth ]
+POST   /api/auth/login        { password } -> Set-Cookie
+POST   /api/auth/logout       -> Clear-Cookie
+
+[ Notes ]
+GET    /api/notes             
+       -> Returns: Note[] (Lightweight)
+       -> Fields: { id, title, textContent, mode, isPinned, updatedAt, createdAt }
+       -> **Sort**: Prisma orderBy: `[{ isPinned: 'desc' }, { updatedAt: 'desc' }]`
+       -> **Constraint**: Exclude 'content' field.
+
+POST   /api/notes             
+       -> Returns: Note (Created empty note)
+
+GET    /api/notes/:id         
+       -> Returns: Note (Full Detail)
+       -> Fields: { ...all_fields, content } 
+
+PUT    /api/notes/:id         
+       -> Body: { title?, content, textContent, mode, isPinned? }
+       -> Returns: Note (Updated)
+
+DELETE /api/notes/:id         -> 200 OK
+
+4. 目录结构 (DIRECTORY STRUCTURE)
+------------------------------------------------------------
+plaindock/
+├── prisma/
+│   └── schema.prisma         # SQLite Schema
+├── src/
+│   ├── app/
+│   │   ├── api/              # Backend Routes (Server Only)
+│   │   │   ├── auth/         
+│   │   │   └── notes/        # [GET(List, Sorted), POST]
+│   │   │       └── [id]/     # [GET(Detail), PUT, DELETE]
+│   │   ├── login/            
+│   │   └── (main)/           
+│   │       ├── layout.tsx    
+│   │       └── page.tsx      
+│   ├── components/
+│   │   ├── editor/
+│   │   │   ├── EditorCanvas.tsx
+│   │   │   └── RichToolbar.tsx
+│   │   ├── sidebar/
+│   │   │   └── Sidebar.tsx
+│   │   └── ui/               
+│   ├── lib/
+│   │   ├── api-client.ts     # Fetch wrappers
+│   │   ├── auth.ts           # JWT utilities
+│   │   ├── db.ts             # Prisma Singleton (Server Only, WAL Init)
+│   │   └── sanitizer/        # [Client Only] Sanitization Logic
+│   │       ├── config.ts     # DOMPurify Allowlist
+│   │       ├── normalize.ts  
+│   │       └── index.ts      
+│   ├── hooks/
+│   │   ├── useAutoSave.ts    # Queue (Dedupe) & State Machine
+│   │   ├── usePaste.ts       # Paste interception (Empty Check)
+│   │   └── useDebounce.ts
+│   └── middleware.ts         # Whitelist-based Auth Guard
+├── .env                      
+└── docker-compose.yml

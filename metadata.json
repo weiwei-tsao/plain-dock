@@ -1,0 +1,5 @@
+{
+  "name": "PlainDock",
+  "description": "A minimalist dual-mode text sanitizer and note-taking application supporting plain text and semantic rich text with a robust 3-layer sanitization pipeline.",
+  "requestFramePermissions": []
+}

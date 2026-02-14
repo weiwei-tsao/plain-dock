@@ -1,0 +1,159 @@
+# ============================================================
+# PRODUCT REQUIREMENT DOCUMENT (PRD) - v1.7 (Implementation Ready)
+# Project: PlainDock
+# Target: Self-Hosted Dual-Mode Text Sanitizer
+# Author: Collaborative AI x User
+# Date: 2026-02-13
+# ============================================================
+
+[ VERSION HISTORY ]
+- v1.0-v1.6: Core specs, sanitization, edge cases, and API payloads.
+- v1.7: Finalized span constraints, empty-HTML logic, API definition, and sort consistency.
+
+1. 产品概述 (OVERVIEW)
+------------------------------------------------------------
+PlainDock: 极简双模文本中转站。支持将杂乱内容清洗为纯文本或语义化富文本。
+部署环境：单人使用，本地 Mac Mini (Docker Compose + SQLite)。
+
+2. 核心功能规范 (CORE SPECS)
+------------------------------------------------------------
+2.1 双模式引擎 (Dual-Mode Engine)
+    模式切换不改变数据库 Schema，但会改变 `content` 字段存储的内容。
+
+    * 纯净模式 (`PLAIN`):
+      - 底层：`<textarea>`。
+      - 数据：存储剥离标签后的纯文本字符串。
+      - 输入：强制转为 `text/plain`。
+
+    * 富文本模式 (`RICH`):
+      - 底层：Tiptap (ProseMirror)。
+      - 数据：存储经过 Sanitizer 处理的 HTML 字符串。
+      - 输入：支持 `text/html`，通过三层清洗策略。
+
+    * 切换规则 (Switch Rules):
+      - `RICH` -> `PLAIN`: 破坏性转换。
+        1. 弹窗确认：“切换到纯文本会永久移除格式并立即保存，是否继续？”
+        2. 若确认：
+           - **数据源**: 必须使用 `editor.getText()` (严禁使用 DOM innerText)。
+           - **状态流转**: 立即更新 UI 为 Plain 模式 (Optimistic UI)。
+           - **持久化**: 立即触发后台保存请求（Fire and Forget）。
+             * Payload: `{ content: text, textContent: text, mode: 'PLAIN' }`
+           - **异常处理**: 若保存失败，UI 显示红色 "Save failed" 状态，保留当前内容在本地内存。
+             * 重试行为: 点击重试使用当前内存最新内容重新调用 API，成功后清除错误状态。
+             * 约束: **禁止自动回滚模式切换**，防止用户输入丢失。
+      
+      - `PLAIN` -> `RICH`: 可逆性仅限文本。
+        1. **包装规则**: 复用 2.2.A 中的 text/plain 包装逻辑（`\n` -> `<br>`, `\n\n` -> `<p>`）。
+        2. 将 `mode` 设为 `RICH`。
+        3. 按常规自动保存逻辑入库。
+
+2.2 剪切板管线 (Clipboard Pipeline)
+    A. 输入策略 (Paste Strategy - Rich Mode):
+       数据流定义：Sanitizer 产出 HTML 字符串 -> Tiptap (Parse HTML to Doc) -> 导出 HTML。
+       
+       1. 数据源获取: 
+          - 优先读取 `text/html`。
+          - **判空逻辑**: 若 `text/html` 为空字符串、仅包含空白字符或仅包含无内容 `<meta>` 标签，则视为无效，降级读取 `text/plain`。
+          - `text/plain` 处理执行**文本包装规则**：
+            * **预处理**: 将 `\r\n` 统一归一化为 `\n`。保留文本首尾的空行（**禁止对整体做 trim 操作**）。
+            * **结构化**: 单个换行符 (`\n`) -> `<br>`; 连续换行符 (`\n\n`) -> 分段为新的 `<p>`。
+       2. 第一层：安全防御 (DOMPurify): 
+          - **Tag Allowlist (最小集)**: `p`, `br`, `strong`, `em`, `u`, `s`, `ul`, `ol`, `li`, `pre`, `code`, `h1`-`h6`, `a`, `span`。
+          - **Span 约束**: `span` 仅允许用于承载白名单内的内联样式（如高亮），其余布局/字体样式须在第三层剔除。
+          - **Attr Allowlist**: `href`, `rel`, `target`, `style` (最终样式由第三层决定)。
+          - 移除所有 `on*` 事件属性 (如 `onclick`, `onerror`, `onload`)。
+          - 移除 `style` 中的 `javascript:`, `url()`, `expression()` 等危险表达式。
+          - 链接协议白名单：仅允许 `http`, `https`, `mailto`。
+          - 外链处理：**属性合并 (Merge)**。确保 `rel` 包含 `noopener noreferrer`，但不移除原有的合法值 (如 `nofollow`)。
+       3. 第二层：一致性归一化 (ParseRule): 
+          - 标签语义对齐（如 `<b>` -> `<strong>`）。
+          - 块级重构：`<div>` 转换为 `<p>`，清除标题内联字号。
+       4. 第三层：结构降级 (Downgrade): 
+          - 样式白名单：仅保留 `color`, `background-color`, `text-decoration`。
+          - 表格降级：每个 `<tr>` 生成一个 `<p>`，单元格间用 `\t` 分隔。
+            (细节：Trim 每个 cell 的首尾空格，但保留内部空格；空单元格保留为空字符串)
+          - 媒体降级：图片/视频转为文本占位符 `[Image/Video: URL]`。
+
+    B. 输出策略 (Copy Strategy):
+       前置条件：Secure Context (HTTPS/localhost) + 用户手势触发。
+       
+       - Copy Plain (独立入口): 始终提供专用按钮。
+         * Plain 模式下：来源为 `<textarea>.value`。
+         * Rich 模式下：来源为 `editor.getText()`。
+         * 动作：`writeText(source)`。
+       
+       - Copy HTML (原样复制): 
+         * **Visibility**: 仅在 Rich 模式显示，Plain 模式隐藏或禁用。
+         1. 构造 `ClipboardItem`。
+            - `text/html`: 使用 `editor.getHTML()` (Sanitized HTML)。
+            - `text/plain`: 使用 `editor.getText()`。
+         2. 异常处理：捕获 `NotAllowedError`, `NotSupportedError`, `SecurityError`。
+         3. 降级：若捕获上述错误，自动降级为 `writeText(plain)` 并提示：
+            “复制富文本失败（浏览器权限限制），已为您复制纯文本。”
+
+2.3 排版工具 (Formatting)
+    H1-H6, Bold, Italic, Strike, Inline Code, Code Block, List, Clear Formatting.
+
+3. 系统设计 (SYSTEM DESIGN)
+------------------------------------------------------------
+3.1 认证 (Authentication)
+    - 方案：单一密码访问。环境变量 `APP_PASSWORD`。
+    - 校验：后端签发长效 JWT Token 存储于 Cookie。
+    - Cookie 属性：`HttpOnly`; `SameSite=Lax`; `Max-Age=30d`。
+      (Secure 属性：仅在 HTTPS 环境开启，`localhost` 默认不启用)
+    - API 规则：Middleware 全局校验，未通过者返回 `401`。
+
+3.2 自动保存与并发 (Data & Sync)
+    - **API Definition**:
+      * Endpoint: `PUT /api/notes/:id`
+      * Body: `{ title?, content, textContent, mode, isPinned? }`
+    - 并发控制：客户端以“请求队列串行化”为主策略。
+      `AbortController` 仅用于前端资源回收，不作为后端一致性依据。
+    - 后端校验：保存时对 `mode` 做白名单校验，非 `PLAIN|RICH` 直接拒绝 (`400 Bad Request`)。
+
+3.3 搜索逻辑 (Search)
+    - 写入：保存时后端自动剥离 `content` 标签，更新 `textContent` 字段。
+    - 查询：`WHERE title LIKE %k% OR textContent LIKE %k%`。
+    - 排序：`ORDER BY isPinned DESC, updatedAt DESC` (置顶优先，时间倒序)。
+    - **一致性**: 前端实时过滤模式下，必须严格遵循上述同一排序规则展示，避免 UI 跳变。
+    - 匹配规则：默认使用 SQLite `NOCASE` 行为（通常仅对 ASCII 有效）。
+      *注：MVP 阶段不对 Unicode/中文做额外的归一化处理，以实际表现为准。*
+
+4. 技术栈与模型 (TECH STACK & SCHEMA)
+------------------------------------------------------------
+4.1 模型定义:
+    model Note {
+      id          String   @id @default(cuid())
+      title       String   @default("Untitled")
+      content     String   // 存储数据原文
+      textContent String   @default("") // 搜索专用纯文本
+      mode        String   @default("PLAIN") // 取值限定: "PLAIN" | "RICH"
+      isPinned    Boolean  @default(false)
+      createdAt   DateTime @default(now())
+      updatedAt   DateTime @updatedAt
+    }
+
+5. 部署配置 (DOCKER COMPOSE)
+------------------------------------------------------------
+services:
+  plaindock:
+    image: plaindock:latest
+    container_name: plaindock
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      - DATABASE_URL=file:/app/data/notes.db
+      - APP_PASSWORD=${YOUR_PASS}
+      - JWT_SECRET=${YOUR_SECRET}
+    volumes:
+      - ./data:/app/data
+
+6. UI/UX 要求
+------------------------------------------------------------
+- 风格：极简主义，无多余边框。
+- 模式：Dark Mode (自动跟随系统)。
+- 侧边栏：按 `updatedAt` 倒序，含置顶区与实时过滤框。
+- 快捷键：
+  `Cmd + S` (立即保存)
+  `Cmd + /` (聚焦搜索)
+  `Cmd + Shift + P` (切换模式)
