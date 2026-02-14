@@ -22,6 +22,8 @@ interface EditorCanvasProps {
 const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete }) => {
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
   const [localTitle, setLocalTitle] = useState(note.title);
+  const [plainContent, setPlainContent] = useState(note.content);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
 
@@ -65,8 +67,18 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
       }
     }
     setLocalTitle(note.title);
+    setPlainContent(note.content);
     setSaveState('IDLE');
   }, [note.id, note.title, editor, note.content, note.mode]);
+
+  // Auto-resize textarea to match content height
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (note.mode === NoteMode.PLAIN && ta) {
+      ta.style.height = 'auto';
+      ta.style.height = `${ta.scrollHeight}px`;
+    }
+  }, [plainContent, note.mode]);
 
   const persistChange = useCallback((payload: NotePayload) => {
     setSaveState('SAVING');
@@ -116,6 +128,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
     if (note.mode === NoteMode.RICH) {
       if (confirm('Switching to plain text will permanently remove formatting and save immediately. Continue?')) {
         const plainText = editor?.getText() || '';
+        setPlainContent(plainText);
         editor?.commands.setContent(plainText);
         persistChange({
           content: plainText,
@@ -157,7 +170,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
   };
 
   return (
-    <div className="flex flex-col h-full bg-black">
+    <div className="flex flex-col h-full min-h-0 bg-black">
       {/* Editor Header */}
       <header className="px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800 bg-black/50 backdrop-blur-md sticky top-0 z-10">
         <input
@@ -239,14 +252,16 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
           <EditorContent editor={editor} className="h-full" />
         ) : (
           <textarea
-            value={editor?.getText() || ''}
+            ref={textareaRef}
+            value={plainContent}
             onChange={(e) => {
               const val = e.target.value;
+              setPlainContent(val);
               editor?.commands.setContent(val);
               triggerSave({ content: val });
             }}
             placeholder="Start typing plain text..."
-            className="w-full h-full bg-transparent resize-none focus:outline-none text-zinc-400 leading-relaxed font-mono text-sm"
+            className="w-full min-h-full bg-transparent resize-none overflow-hidden focus:outline-none text-zinc-400 leading-relaxed font-mono text-sm"
           />
         )}
       </div>

@@ -63,7 +63,7 @@ export default function MainPage() {
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 bg-zinc-900/30">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-zinc-900/30">
         {activeNote ? (
           <EditorCanvas
             note={activeNote}
