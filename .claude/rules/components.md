@@ -12,6 +12,7 @@
 
 - All components use the `'use client'` directive.
 - Type components with `React.FC<Props>` and define an explicit `interface` for props.
+- Use `import type` for type-only imports (enforced by ESLint `consistent-type-imports` rule).
 - Icons: import individually from `lucide-react` — never import the entire package.
 
 ## State Patterns

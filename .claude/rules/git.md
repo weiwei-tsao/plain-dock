@@ -26,6 +26,13 @@ chore(db): add prisma migration for tags field
 - Separate refactors from feature changes.
 - Schema migrations get their own commit.
 
+## Pre-Commit Quality Checks
+
+Before committing, ensure all checks pass:
+- `npm run lint` — ESLint (enforced via hooks)
+- `npm run format:check` — Prettier formatting
+- `npm run typecheck` — TypeScript type check (enforced via hooks)
+
 ## Files to Never Commit
 
 - `.env.local` and any `.env.*` files (except `.env.example`)
@@ -34,3 +41,4 @@ chore(db): add prisma migration for tags field
 - `node_modules/`
 - `.next/` build output
 - `next-env.d.ts` (auto-generated)
+- `tsconfig.tsbuildinfo` (TypeScript incremental build cache)

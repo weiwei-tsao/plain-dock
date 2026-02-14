@@ -39,6 +39,15 @@
   - Sanitizer: `src/lib/sanitizer/config.ts` (`ALLOWED_TAGS`, `DANGEROUS_TAGS`, etc.)
 - New constants: place in `constants.ts` if used across features, otherwise in the feature's own config.
 
+## Code Quality Tooling
+
+- **ESLint** — flat config in `eslint.config.mjs`. Plugins: `typescript-eslint`, `react-hooks`, `@next/eslint-plugin-next`. Uses `eslint-config-prettier` to avoid conflicts.
+- **Prettier** — config in `.prettierrc`. Uses `prettier-plugin-tailwindcss` for class sorting.
+- **TypeScript** — `strict: true` in `tsconfig.json`. Check via `npm run typecheck`.
+- Key ESLint rules:
+  - `@typescript-eslint/consistent-type-imports` — enforces `import type` for type-only imports.
+  - `@typescript-eslint/no-unused-vars` — allows `_` prefix for intentionally unused params.
+
 ## Environment Variables
 
 - `DATABASE_URL` — Prisma connection string
