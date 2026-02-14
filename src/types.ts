@@ -1,7 +1,6 @@
-
 export enum NoteMode {
   PLAIN = 'PLAIN',
-  RICH = 'RICH'
+  RICH = 'RICH',
 }
 
 export interface Note {

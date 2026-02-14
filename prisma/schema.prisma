@@ -1,0 +1,19 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  title       String   @default("Untitled")
+  content     String   @default("")
+  textContent String   @default("")
+  mode        String   @default("PLAIN")
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

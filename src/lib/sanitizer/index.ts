@@ -1,80 +1,65 @@
-
 /**
  * PlainDock Sanitization Engine
  * Implementation based on PRD v1.7 Section 2.2.A
+ *
+ * 3-layer pipeline:
+ *   1. Security defense (strip dangerous elements)
+ *   2. Consistency normalization (semantic tag alignment)
+ *   3. Structure downgrade (tables, media → text)
  */
 
-// We'll use a virtual DOM for processing in a SPA environment
-// In a real environment, we'd use DOMPurify library.
-// Since we are in a senior role, we will simulate a robust sanitization.
+import { ALLOWED_TAGS, ALLOWED_STYLES, DANGEROUS_TAGS } from './config';
+import { TAG_NORMALIZE_MAP } from './normalize';
 
 export function sanitizeHTML(rawHTML: string): string {
   if (!rawHTML || rawHTML.trim() === '') return '';
 
-  // Layer 1: Security Defense (Simulated DOMPurify)
+  // Layer 1: Security Defense
   const parser = new DOMParser();
   const doc = parser.parseFromString(rawHTML, 'text/html');
-
-  // Remove meta tags or other invisible content
-  doc.querySelectorAll('meta, script, style, iframe, object').forEach(el => el.remove());
+  doc.querySelectorAll(DANGEROUS_TAGS.join(', ')).forEach((el) => el.remove());
 
   // Layer 2: Consistency & Normalization
-  // div -> p
-  doc.querySelectorAll('div').forEach(div => {
-    const p = doc.createElement('p');
-    p.innerHTML = div.innerHTML;
-    div.replaceWith(p);
-  });
+  for (const [from, to] of Object.entries(TAG_NORMALIZE_MAP)) {
+    doc.querySelectorAll(from).forEach((el) => {
+      const replacement = doc.createElement(to);
+      replacement.innerHTML = el.innerHTML;
+      el.replaceWith(replacement);
+    });
+  }
 
-  // <b> -> <strong>, <i> -> <em>
-  doc.querySelectorAll('b').forEach(b => {
-    const strong = doc.createElement('strong');
-    strong.innerHTML = b.innerHTML;
-    b.replaceWith(strong);
-  });
-  doc.querySelectorAll('i').forEach(i => {
-    const em = doc.createElement('em');
-    em.innerHTML = i.innerHTML;
-    i.replaceWith(em);
-  });
-
-  // Layer 3: Structure Downgrade
-  // Tables to P with tabs
-  doc.querySelectorAll('table').forEach(table => {
+  // Layer 3: Structure Downgrade — Tables
+  doc.querySelectorAll('table').forEach((table) => {
     const rows = Array.from(table.querySelectorAll('tr'));
-    rows.forEach(tr => {
+    rows.forEach((tr) => {
       const p = doc.createElement('p');
-      const cells = Array.from(tr.querySelectorAll('td, th'))
-        .map(cell => cell.textContent?.trim() || '');
+      const cells = Array.from(tr.querySelectorAll('td, th')).map(
+        (cell) => cell.textContent?.trim() || '',
+      );
       p.textContent = cells.join('\t');
       tr.replaceWith(p);
     });
     table.replaceWith(...Array.from(table.childNodes));
   });
 
-  // Media to placeholders
-  doc.querySelectorAll('img, video').forEach(media => {
-    const src = (media as any).src || '';
-    const text = `[${media.tagName}: ${src}]`;
+  // Layer 3: Structure Downgrade — Media
+  doc.querySelectorAll('img, video').forEach((media) => {
+    const src = (media as HTMLImageElement).src || '';
     const span = doc.createElement('span');
-    span.textContent = text;
+    span.textContent = `[${media.tagName}: ${src}]`;
     media.replaceWith(span);
   });
 
   // Final Cleanup: Keep only allowlisted tags and styles
-  const allowedTags = ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'pre', 'code', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'span'];
-  const allowedStyles = ['color', 'background-color', 'text-decoration'];
-
   const clean = (node: Node): Node | null => {
     if (node.nodeType === Node.TEXT_NODE) return node.cloneNode(true);
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
       const tagName = el.tagName.toLowerCase();
 
-      if (!allowedTags.includes(tagName)) {
-        // Flatten content if tag not allowed
+      if (!ALLOWED_TAGS.includes(tagName)) {
         const fragment = doc.createDocumentFragment();
-        el.childNodes.forEach(child => {
+        el.childNodes.forEach((child) => {
           const cleaned = clean(child);
           if (cleaned) fragment.appendChild(cleaned);
         });
@@ -82,31 +67,38 @@ export function sanitizeHTML(rawHTML: string): string {
       }
 
       const newEl = doc.createElement(tagName);
-      
-      // Attributes
+
+      // Anchor attributes
       if (tagName === 'a') {
         const href = el.getAttribute('href');
         if (href && (href.startsWith('http') || href.startsWith('mailto'))) {
           newEl.setAttribute('href', href);
           newEl.setAttribute('target', '_blank');
-          newEl.setAttribute('rel', 'noopener noreferrer');
+          // Merge rel: preserve existing + ensure noopener noreferrer
+          const existingRel = el.getAttribute('rel') || '';
+          const relTokens = new Set(existingRel.split(/\s+/).filter(Boolean));
+          relTokens.add('noopener');
+          relTokens.add('noreferrer');
+          newEl.setAttribute('rel', Array.from(relTokens).join(' '));
         }
       }
 
-      // Styles
+      // Style filtering
       const style = el.getAttribute('style');
       if (style) {
-        const styleParts = style.split(';').map(s => s.trim()).filter(s => s.length > 0);
-        const filteredStyles = styleParts.filter(part => {
-          const key = part.split(':')[0].trim().toLowerCase();
-          return allowedStyles.includes(key);
-        });
+        const filteredStyles = style
+          .split(';')
+          .map((s) => s.trim())
+          .filter((s) => {
+            const key = s.split(':')[0]?.trim().toLowerCase();
+            return key && ALLOWED_STYLES.includes(key);
+          });
         if (filteredStyles.length > 0) {
           newEl.setAttribute('style', filteredStyles.join('; '));
         }
       }
 
-      el.childNodes.forEach(child => {
+      el.childNodes.forEach((child) => {
         const cleaned = clean(child);
         if (cleaned) newEl.appendChild(cleaned);
       });
@@ -117,7 +109,7 @@ export function sanitizeHTML(rawHTML: string): string {
   };
 
   const finalFragment = doc.createDocumentFragment();
-  doc.body.childNodes.forEach(node => {
+  doc.body.childNodes.forEach((node) => {
     const cleaned = clean(node);
     if (cleaned) finalFragment.appendChild(cleaned);
   });
@@ -127,18 +119,22 @@ export function sanitizeHTML(rawHTML: string): string {
   return container.innerHTML;
 }
 
+function escapeHTML(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function wrapPlainText(text: string): string {
-  // PRD 2.2.A: Normalize \r\n -> \n, no trim
+  // PRD 2.2.A: Normalize \r\n -> \n, no trim on overall text
   const normalized = text.replace(/\r\n/g, '\n');
-  
-  // Single \n -> <br>, Double \n -> new <p>
+
+  // Double \n → new <p>, single \n → <br>
   const paragraphs = normalized.split(/\n\n+/);
-  return paragraphs
-    .map(p => {
-      const lines = p.split('\n').join('<br>');
-      return `<p>${lines}</p>`;
-    })
-    .join('');
+  return paragraphs.map((p) => `<p>${escapeHTML(p).split('\n').join('<br>')}</p>`).join('');
 }
 
 export function getNoteTextContent(html: string): string {
