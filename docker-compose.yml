@@ -1,0 +1,13 @@
+services:
+  plaindock:
+    build: .
+    container_name: plaindock
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=file:/app/data/notes.db
+      - APP_PASSWORD=${APP_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - ./data:/app/data

@@ -1,7 +1,8 @@
+'use client';
 
 import React from 'react';
-import { Note } from '../types';
-import { Search, Plus, Pin, FileText, Layout, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { Note } from '@/types';
+import { Search, Plus, Pin, Layout, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface SidebarProps {
   notes: Note[];
@@ -14,12 +15,12 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  notes, activeNoteId, onSelectNote, onCreateNote, searchQuery, onSearch, isOpen, onToggle 
+const Sidebar: React.FC<SidebarProps> = ({
+  notes, activeNoteId, onSelectNote, onCreateNote, searchQuery, onSearch, isOpen, onToggle,
 }) => {
-  const filteredNotes = notes.filter(n => 
-    n.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    n.textContent.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredNotes = notes.filter((n) =>
+    n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    n.textContent.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -31,7 +32,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Layout className="w-5 h-5 text-indigo-400 shrink-0" />
             <span className="font-semibold truncate">PlainDock</span>
           </div>
-          <button 
+          <button
             onClick={onCreateNote}
             className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
           >
@@ -43,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="px-4 py-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input 
+            <input
               type="text"
               placeholder="Search (Cmd + /)"
               value={searchQuery}
@@ -59,13 +60,13 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="text-center mt-10 text-zinc-600 text-sm">No notes found</div>
           ) : (
             <div className="space-y-1">
-              {filteredNotes.map(note => (
+              {filteredNotes.map((note) => (
                 <button
                   key={note.id}
                   onClick={() => onSelectNote(note.id)}
                   className={`w-full text-left p-3 rounded-lg transition-all group relative ${
-                    activeNoteId === note.id 
-                      ? 'bg-zinc-800 text-white' 
+                    activeNoteId === note.id
+                      ? 'bg-zinc-800 text-white'
                       : 'hover:bg-zinc-900 text-zinc-400'
                   }`}
                 >
@@ -93,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Toggle Button */}
-      <button 
+      <button
         onClick={onToggle}
         className="absolute -right-3 top-1/2 -translate-y-1/2 z-50 bg-zinc-900 border border-zinc-800 rounded-full p-1 hover:text-white text-zinc-500 transition-colors shadow-xl"
       >

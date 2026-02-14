@@ -1,62 +1,59 @@
+'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Note, NoteMode, SaveState } from './types';
-import { noteService } from './services/noteService';
-import Sidebar from './components/Sidebar';
-import EditorCanvas from './components/EditorCanvas';
-import Login from './components/Login';
+import React, { useState, useEffect, useCallback } from 'react';
+import type { Note } from '@/types';
+import { noteApi } from '@/lib/api-client';
+import Sidebar from '@/components/sidebar/Sidebar';
+import EditorCanvas from '@/components/editor/EditorCanvas';
 
-const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+export default function MainPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Check auth on mount
-  useEffect(() => {
-    const token = localStorage.getItem('plaindock_token');
-    if (token) setIsAuthenticated(true);
-  }, []);
-
   const loadNotes = useCallback(async () => {
-    const data = await noteService.list();
+    const data = await noteApi.list();
     setNotes(data);
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadNotes();
+    loadNotes();
+  }, [loadNotes]);
+
+  // Fetch full note (with content) when selection changes
+  useEffect(() => {
+    if (!activeNoteId) {
+      setActiveNote(null);
+      return;
     }
-  }, [isAuthenticated, loadNotes]);
+    noteApi.get(activeNoteId).then(setActiveNote).catch(() => setActiveNote(null));
+  }, [activeNoteId]);
 
   const handleCreateNote = async () => {
-    const newNote = await noteService.create();
-    setNotes(prev => [newNote, ...prev]);
+    const newNote = await noteApi.create();
+    setNotes((prev) => [newNote, ...prev]);
     setActiveNoteId(newNote.id);
   };
 
   const handleDeleteNote = async (id: string) => {
-    await noteService.delete(id);
-    setNotes(prev => prev.filter(n => n.id !== id));
-    if (activeNoteId === id) setActiveNoteId(null);
+    await noteApi.delete(id);
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+    if (activeNoteId === id) {
+      setActiveNoteId(null);
+    }
   };
 
   const handleUpdateNoteLocally = (updatedNote: Note) => {
-    setNotes(prev => prev.map(n => n.id === updatedNote.id ? updatedNote : n));
+    setNotes((prev) => prev.map((n) => (n.id === updatedNote.id ? updatedNote : n)));
+    setActiveNote(updatedNote);
   };
-
-  if (!isAuthenticated) {
-    return <Login onLogin={() => setIsAuthenticated(true)} />;
-  }
-
-  const activeNote = notes.find(n => n.id === activeNoteId) || null;
 
   return (
     <div className="flex h-screen bg-black text-zinc-100 overflow-hidden font-sans">
-      {/* Sidebar */}
-      <Sidebar 
-        notes={notes} 
+      <Sidebar
+        notes={notes}
         activeNoteId={activeNoteId}
         onSelectNote={setActiveNoteId}
         onCreateNote={handleCreateNote}
@@ -66,11 +63,10 @@ const App: React.FC = () => {
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
-      {/* Main Area */}
       <main className="flex-1 flex flex-col min-w-0 bg-zinc-900/30">
         {activeNote ? (
-          <EditorCanvas 
-            note={activeNote} 
+          <EditorCanvas
+            note={activeNote}
             onUpdate={handleUpdateNoteLocally}
             onDelete={() => handleDeleteNote(activeNote.id)}
           />
@@ -79,7 +75,7 @@ const App: React.FC = () => {
             <div className="text-center">
               <h1 className="text-2xl font-light mb-2">PlainDock</h1>
               <p className="text-sm">Select or create a note to begin</p>
-              <button 
+              <button
                 onClick={handleCreateNote}
                 className="mt-6 px-4 py-2 border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors"
               >
@@ -91,6 +87,4 @@ const App: React.FC = () => {
       </main>
     </div>
   );
-};
-
-export default App;
+}
