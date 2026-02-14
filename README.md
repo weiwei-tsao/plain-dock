@@ -1,6 +1,6 @@
 # PlainDock
 
-A minimalist dual-mode text sanitizer and note-taking application. Notes can operate in **Plain Text** or **Rich Text** mode, with a 3-layer HTML sanitization pipeline that cleans pasted content for safe, consistent formatting.
+A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Plain Text** or **Rich Text** mode, with a 3-layer HTML sanitization pipeline that cleans pasted content for safe, consistent formatting.
 
 ## Features
 
@@ -9,17 +9,29 @@ A minimalist dual-mode text sanitizer and note-taking application. Notes can ope
 - **Auto-save** — 1-second debounced saves with sequential request queue
 - **Pin & search** — pin important notes to the top, search by title or content
 - **Copy options** — copy as plain text or rich HTML to clipboard
-- **Local storage** — all data persisted in the browser, no server required
+- **Password-protected** — single shared password with JWT session cookies
+- **SQLite storage** — persistent data via Prisma, no external database required
+- **Docker-ready** — multi-stage Dockerfile with standalone Next.js output
 
 ## Getting Started
 
-**Prerequisites:** Node.js
+**Prerequisites:** Node.js 20+
 
 1. Install dependencies:
    ```
    npm install
    ```
-2. Start the dev server:
+2. Set up environment variables in `.env.local`:
+   ```
+   DATABASE_URL="file:./dev.db"
+   APP_PASSWORD="your-password"
+   JWT_SECRET="your-secret"
+   ```
+3. Run the initial database migration:
+   ```
+   npx prisma migrate dev
+   ```
+4. Start the dev server:
    ```
    npm run dev
    ```
@@ -29,14 +41,25 @@ A minimalist dual-mode text sanitizer and note-taking application. Notes can ope
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server |
+| `npm run dev` | Start dev server (Turbopack) on port 3000 |
 | `npm run build` | Production build |
-| `npm run preview` | Preview production build |
+| `npm run start` | Start production server on port 3000 |
+| `npx prisma migrate dev` | Create/apply database migrations |
+| `npx prisma studio` | Browse the database via GUI |
+
+## Docker Deployment
+
+```bash
+docker compose up -d
+```
+
+Requires `APP_PASSWORD` and `JWT_SECRET` environment variables. SQLite data is persisted to `./data` via a volume mount.
 
 ## Tech Stack
 
+- Next.js 16 (App Router, Turbopack)
 - React 19 + TypeScript
-- Vite
+- Prisma + SQLite
+- Tailwind CSS v4
 - Tiptap (rich text editor)
-- Tailwind CSS (CDN)
 - Lucide React (icons)
