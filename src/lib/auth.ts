@@ -4,7 +4,11 @@ import { MAX_AGE } from '@/lib/constants';
 
 export { COOKIE_NAME, MAX_AGE } from '@/lib/constants';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export function signToken(): string {
   return jwt.sign({ authenticated: true }, JWT_SECRET, { expiresIn: MAX_AGE });
