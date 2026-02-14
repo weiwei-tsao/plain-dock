@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useId, useRef } from 'react';
 import { AlertTriangle, Info, X } from 'lucide-react';
 
 type DialogVariant = 'danger' | 'warning' | 'info';
@@ -51,7 +51,38 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onCancel,
 }) => {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const style = variantStyles[variant];
+  const id = useId();
+  const titleId = `${id}-title`;
+  const descId = `${id}-desc`;
+
+  const trapFocus = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    [onCancel],
+  );
 
   useEffect(() => {
     if (open) {
@@ -61,12 +92,9 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onCancel]);
+    document.addEventListener('keydown', trapFocus);
+    return () => document.removeEventListener('keydown', trapFocus);
+  }, [open, trapFocus]);
 
   if (!open) return null;
 
@@ -76,9 +104,17 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
 
       {/* Dialog */}
-      <div className="animate-in fade-in zoom-in-95 relative mx-4 w-full max-w-sm rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descId}
+        className="animate-in fade-in zoom-in-95 relative mx-4 w-full max-w-sm rounded-xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl"
+      >
         <button
           onClick={onCancel}
+          aria-label="Close"
           className="absolute top-3 right-3 rounded-lg p-1 text-zinc-500 transition-colors hover:text-zinc-300"
         >
           <X className="h-4 w-4" />
@@ -91,8 +127,12 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             {style.icon}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-400">{message}</p>
+            <h3 id={titleId} className="text-sm font-semibold text-zinc-100">
+              {title}
+            </h3>
+            <p id={descId} className="mt-1 text-sm leading-relaxed text-zinc-400">
+              {message}
+            </p>
           </div>
         </div>
 
