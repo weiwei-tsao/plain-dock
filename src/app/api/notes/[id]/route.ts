@@ -16,7 +16,15 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 // PUT /api/notes/:id — Update note
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await request.json();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
   const { title, content, textContent, mode, isPinned } = body;
 
   // Validate mode
