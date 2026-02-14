@@ -9,6 +9,8 @@ import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
 import { sanitizeHTML, wrapPlainText, getNoteTextContent } from '@/lib/sanitizer';
 import RichToolbar from './RichToolbar';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import Toast from '../ui/Toast';
 import {
   Pin, Trash2, Copy, FileCode, Type, AlertCircle, CheckCircle2,
 } from 'lucide-react';
@@ -23,6 +25,9 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
   const [localTitle, setLocalTitle] = useState(note.title);
   const [plainContent, setPlainContent] = useState(note.content);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -126,16 +131,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
 
   const handleSwitchMode = () => {
     if (note.mode === NoteMode.RICH) {
-      if (confirm('Switching to plain text will permanently remove formatting and save immediately. Continue?')) {
-        const plainText = editor?.getText() || '';
-        setPlainContent(plainText);
-        editor?.commands.setContent(plainText);
-        persistChange({
-          content: plainText,
-          textContent: plainText,
-          mode: NoteMode.PLAIN,
-        });
-      }
+      setShowModeConfirm(true);
     } else {
       const richHTML = wrapPlainText(editor?.getText() || '');
       editor?.commands.setContent(richHTML);
@@ -145,6 +141,18 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
         mode: NoteMode.RICH,
       });
     }
+  };
+
+  const confirmSwitchToPlain = () => {
+    setShowModeConfirm(false);
+    const plainText = editor?.getText() || '';
+    setPlainContent(plainText);
+    editor?.commands.setContent(plainText);
+    persistChange({
+      content: plainText,
+      textContent: plainText,
+      mode: NoteMode.PLAIN,
+    });
   };
 
   const copyToClipboard = async (isHTML: boolean = false) => {
@@ -158,14 +166,14 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
         await navigator.clipboard.write([
           new ClipboardItem({ 'text/html': blobHTML, 'text/plain': blobText }),
         ]);
-        alert('Rich text copied!');
+        setToast({ message: 'Rich text copied!', variant: 'success' });
       } else {
         await navigator.clipboard.writeText(editor.getText());
-        alert('Plain text copied!');
+        setToast({ message: 'Plain text copied!', variant: 'success' });
       }
     } catch {
       await navigator.clipboard.writeText(editor.getText());
-      alert('Copying rich text failed, plain text copied instead.');
+      setToast({ message: 'Copying rich text failed, plain text copied instead.', variant: 'error' });
     }
   };
 
@@ -234,7 +242,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
           )}
 
           <button
-            onClick={onDelete}
+            onClick={() => setShowDeleteConfirm(true)}
             className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
             title="Delete"
           >
@@ -279,6 +287,36 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
           <span>{getNoteTextContent(note.content).length} chars</span>
         </div>
       </footer>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete Note"
+        message="This note will be permanently deleted. This action cannot be undone."
+        variant="danger"
+        confirmLabel="Delete"
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          onDelete();
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={showModeConfirm}
+        title="Switch to Plain Text"
+        message="Switching to plain text will permanently remove formatting and save immediately. Continue?"
+        variant="warning"
+        confirmLabel="Switch"
+        onConfirm={confirmSwitchToPlain}
+        onCancel={() => setShowModeConfirm(false)}
+      />
+
+      <Toast
+        open={toast !== null}
+        message={toast?.message ?? ''}
+        variant={toast?.variant}
+        onClose={() => setToast(null)}
+      />
     </div>
   );
 };
