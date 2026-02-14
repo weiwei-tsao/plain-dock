@@ -119,13 +119,22 @@ export function sanitizeHTML(rawHTML: string): string {
   return container.innerHTML;
 }
 
+function escapeHTML(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function wrapPlainText(text: string): string {
   // PRD 2.2.A: Normalize \r\n -> \n, no trim on overall text
   const normalized = text.replace(/\r\n/g, '\n');
 
   // Double \n → new <p>, single \n → <br>
   const paragraphs = normalized.split(/\n\n+/);
-  return paragraphs.map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('');
+  return paragraphs.map((p) => `<p>${escapeHTML(p).split('\n').join('<br>')}</p>`).join('');
 }
 
 export function getNoteTextContent(html: string): string {
