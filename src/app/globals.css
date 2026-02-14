@@ -1,10 +1,19 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #444; }
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
 
 body {
   background-color: #000;
@@ -17,10 +26,19 @@ body {
   min-height: 400px;
   color: #d1d1d1;
 }
-.ProseMirror p { margin-bottom: 1em; }
-.ProseMirror strong { font-weight: bold; color: #fff; }
-.ProseMirror em { font-style: italic; }
-.ProseMirror u { text-decoration: underline; }
+.ProseMirror p {
+  margin-bottom: 1em;
+}
+.ProseMirror strong {
+  font-weight: bold;
+  color: #fff;
+}
+.ProseMirror em {
+  font-style: italic;
+}
+.ProseMirror u {
+  text-decoration: underline;
+}
 .ProseMirror code {
   background: #1a1a1a;
   padding: 0.2rem 0.4rem;
@@ -37,9 +55,37 @@ body {
   overflow-x: auto;
   font-family: monospace;
 }
-.ProseMirror h1 { font-size: 1.875rem; font-weight: bold; margin-bottom: 0.5em; color: #fff; }
-.ProseMirror h2 { font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5em; color: #fff; }
-.ProseMirror h3 { font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5em; color: #fff; }
-.ProseMirror ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1em; }
-.ProseMirror ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1em; }
-.ProseMirror blockquote { border-left: 3px solid #3f3f46; padding-left: 1rem; color: #a1a1aa; font-style: italic; }
+.ProseMirror h1 {
+  font-size: 1.875rem;
+  font-weight: bold;
+  margin-bottom: 0.5em;
+  color: #fff;
+}
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 0.5em;
+  color: #fff;
+}
+.ProseMirror h3 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-bottom: 0.5em;
+  color: #fff;
+}
+.ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1em;
+}
+.ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1em;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid #3f3f46;
+  padding-left: 1rem;
+  color: #a1a1aa;
+  font-style: italic;
+}

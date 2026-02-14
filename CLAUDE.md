@@ -9,15 +9,20 @@ PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note oper
 ## Development Commands
 
 ```bash
-npm install          # Install deps + auto-runs `prisma generate` via postinstall
-npm run dev          # Next.js dev server with Turbopack on port 3000
-npm run build        # Production build
-npm run start        # Start production server on port 3000
+npm install              # Install deps + auto-runs `prisma generate` via postinstall
+npm run dev              # Next.js dev server with Turbopack on port 3000
+npm run build            # Production build
+npm run start            # Start production server on port 3000
+npm run lint             # ESLint check on src/
+npm run lint:fix         # ESLint auto-fix
+npm run format           # Prettier format src/
+npm run format:check     # Prettier check (no write)
+npm run typecheck        # TypeScript type check (tsc --noEmit)
 npx prisma migrate dev   # Create/apply migrations during development
 npx prisma studio        # GUI for browsing the SQLite database
 ```
 
-No test runner or linter is configured.
+No test runner is configured.
 
 ## Environment Variables
 

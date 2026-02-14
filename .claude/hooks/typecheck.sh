@@ -13,7 +13,7 @@ esac
 
 # Run type check
 cd "$CLAUDE_PROJECT_DIR" || exit 0
-OUTPUT=$(npx tsc --noEmit 2>&1)
+OUTPUT=$(npm run typecheck 2>&1)
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -ne 0 ]; then

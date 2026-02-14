@@ -28,7 +28,10 @@ export default function MainPage() {
       setActiveNote(null);
       return;
     }
-    noteApi.get(activeNoteId).then(setActiveNote).catch(() => setActiveNote(null));
+    noteApi
+      .get(activeNoteId)
+      .then(setActiveNote)
+      .catch(() => setActiveNote(null));
   }, [activeNoteId]);
 
   const handleCreateNote = async () => {
@@ -51,7 +54,7 @@ export default function MainPage() {
   };
 
   return (
-    <div className="flex h-screen bg-black text-zinc-100 overflow-hidden font-sans">
+    <div className="flex h-screen overflow-hidden bg-black font-sans text-zinc-100">
       <Sidebar
         notes={notes}
         activeNoteId={activeNoteId}
@@ -63,7 +66,7 @@ export default function MainPage() {
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-zinc-900/30">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-900/30">
         {activeNote ? (
           <EditorCanvas
             note={activeNote}
@@ -71,13 +74,13 @@ export default function MainPage() {
             onDelete={() => handleDeleteNote(activeNote.id)}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-zinc-500">
+          <div className="flex flex-1 items-center justify-center text-zinc-500">
             <div className="text-center">
-              <h1 className="text-2xl font-light mb-2">PlainDock</h1>
+              <h1 className="mb-2 text-2xl font-light">PlainDock</h1>
               <p className="text-sm">Select or create a note to begin</p>
               <button
                 onClick={handleCreateNote}
-                className="mt-6 px-4 py-2 border border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors"
+                className="mt-6 rounded-lg border border-zinc-700 px-4 py-2 transition-colors hover:bg-zinc-800"
               >
                 Create New Note
               </button>

@@ -11,9 +11,7 @@ import { sanitizeHTML, wrapPlainText, getNoteTextContent } from '@/lib/sanitizer
 import RichToolbar from './RichToolbar';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
-import {
-  Pin, Trash2, Copy, FileCode, Type, AlertCircle, CheckCircle2,
-} from 'lucide-react';
+import { Pin, Trash2, Copy, FileCode, Type, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface EditorCanvasProps {
   note: Note;
@@ -27,7 +25,10 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
   const [plainContent, setPlainContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
-  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    variant: 'success' | 'error' | 'info';
+  } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -85,34 +86,43 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
     }
   }, [plainContent, note.mode]);
 
-  const persistChange = useCallback((payload: NotePayload) => {
-    setSaveState('SAVING');
-    requestQueue.current = requestQueue.current.then(async () => {
-      try {
-        const updated = await noteApi.update(note.id, payload);
-        onUpdate(updated);
-        setSaveState('SAVED');
-        setTimeout(() => setSaveState('IDLE'), 2000);
-      } catch {
-        setSaveState('FAILED');
-      }
-    });
-  }, [note.id, onUpdate]);
+  const persistChange = useCallback(
+    (payload: NotePayload) => {
+      setSaveState('SAVING');
+      requestQueue.current = requestQueue.current.then(async () => {
+        try {
+          const updated = await noteApi.update(note.id, payload);
+          onUpdate(updated);
+          setSaveState('SAVED');
+          setTimeout(() => setSaveState('IDLE'), 2000);
+        } catch {
+          setSaveState('FAILED');
+        }
+      });
+    },
+    [note.id, onUpdate],
+  );
 
-  const triggerSave = useCallback((updates: Partial<NotePayload>) => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      const content = updates.content ?? (note.mode === NoteMode.RICH ? editor?.getHTML() : editor?.getText()) ?? '';
-      const payload: NotePayload = {
-        title: updates.title ?? localTitle,
-        content,
-        textContent: getNoteTextContent(content),
-        mode: updates.mode ?? note.mode,
-        isPinned: updates.isPinned ?? note.isPinned,
-      };
-      persistChange(payload);
-    }, 1000);
-  }, [localTitle, note.mode, note.isPinned, persistChange, editor]);
+  const triggerSave = useCallback(
+    (updates: Partial<NotePayload>) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        const content =
+          updates.content ??
+          (note.mode === NoteMode.RICH ? editor?.getHTML() : editor?.getText()) ??
+          '';
+        const payload: NotePayload = {
+          title: updates.title ?? localTitle,
+          content,
+          textContent: getNoteTextContent(content),
+          mode: updates.mode ?? note.mode,
+          isPinned: updates.isPinned ?? note.isPinned,
+        };
+        persistChange(payload);
+      }, 1000);
+    },
+    [localTitle, note.mode, note.isPinned, persistChange, editor],
+  );
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -173,80 +183,91 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
       }
     } catch {
       await navigator.clipboard.writeText(editor.getText());
-      setToast({ message: 'Copying rich text failed, plain text copied instead.', variant: 'error' });
+      setToast({
+        message: 'Copying rich text failed, plain text copied instead.',
+        variant: 'error',
+      });
     }
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-black">
+    <div className="flex h-full min-h-0 flex-col bg-black">
       {/* Editor Header */}
-      <header className="px-6 py-4 flex items-center justify-between gap-4 border-b border-zinc-800 bg-black/50 backdrop-blur-md sticky top-0 z-10">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-zinc-800 bg-black/50 px-6 py-4 backdrop-blur-md">
         <input
           type="text"
           value={localTitle}
           onChange={handleTitleChange}
           placeholder="Note Title"
-          className="bg-transparent text-xl font-medium focus:outline-none w-full placeholder-zinc-800 text-zinc-100"
+          className="w-full bg-transparent text-xl font-medium text-zinc-100 placeholder-zinc-800 focus:outline-none"
         />
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center mr-2">
-            {saveState === 'SAVING' && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse mr-2" />}
-            {saveState === 'SAVED' && <CheckCircle2 className="w-4 h-4 text-green-500 mr-2" />}
-            {saveState === 'FAILED' && <AlertCircle className="w-4 h-4 text-red-500 mr-2" />}
-            <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-bold">
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="mr-2 flex items-center">
+            {saveState === 'SAVING' && (
+              <div className="mr-2 h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+            )}
+            {saveState === 'SAVED' && <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />}
+            {saveState === 'FAILED' && <AlertCircle className="mr-2 h-4 w-4 text-red-500" />}
+            <span className="text-[10px] font-bold tracking-wider text-zinc-600 uppercase">
               {saveState === 'IDLE' ? '' : saveState}
             </span>
           </div>
 
           <button
             onClick={handleTogglePin}
-            className={`p-2 rounded-lg transition-all ${note.isPinned ? 'text-indigo-400 bg-indigo-400/10' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
+            className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
             title="Pin note"
           >
-            <Pin className={`w-4 h-4 ${note.isPinned ? 'fill-current' : ''}`} />
+            <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
           </button>
 
           <button
             onClick={handleSwitchMode}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-sm ${
+            className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               note.mode === NoteMode.RICH
-                ? 'bg-indigo-600 border-indigo-500 text-white hover:bg-indigo-500'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
+                : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
             }`}
             title="Switch Mode (Cmd+Shift+P)"
           >
-            {note.mode === NoteMode.RICH ? <FileCode className="w-4 h-4" /> : <Type className="w-4 h-4" />}
+            {note.mode === NoteMode.RICH ? (
+              <FileCode className="h-4 w-4" />
+            ) : (
+              <Type className="h-4 w-4" />
+            )}
             {note.mode}
           </button>
 
-          <div className="w-px h-6 bg-zinc-800 mx-1" />
+          <div className="mx-1 h-6 w-px bg-zinc-800" />
 
           <button
             onClick={() => copyToClipboard(false)}
-            className="p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors"
+            className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
             title="Copy Plain"
           >
-            <Copy className="w-4 h-4" />
+            <Copy className="h-4 w-4" />
           </button>
 
           {note.mode === NoteMode.RICH && (
             <button
               onClick={() => copyToClipboard(true)}
-              className="p-2 text-zinc-500 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-all flex items-center gap-1.5"
+              className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-indigo-400/10 hover:text-indigo-400"
               title="Copy Rich (HTML)"
             >
-              <Copy className="w-4 h-4" />
-              <span className="text-[9px] font-black border border-current px-1 rounded-sm">HTML</span>
+              <Copy className="h-4 w-4" />
+              <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                HTML
+              </span>
             </button>
           )}
 
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+            className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-red-400/10 hover:text-red-400"
             title="Delete"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </header>
@@ -255,7 +276,9 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
       {editor && note.mode === NoteMode.RICH && <RichToolbar editor={editor} />}
 
       {/* Editor Body */}
-      <div className={`flex-1 overflow-auto p-6 md:px-20 lg:px-40 transition-colors ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}>
+      <div
+        className={`flex-1 overflow-auto p-6 transition-colors md:px-20 lg:px-40 ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}
+      >
         {note.mode === NoteMode.RICH ? (
           <EditorContent editor={editor} className="h-full" />
         ) : (
@@ -269,20 +292,22 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
               triggerSave({ content: val });
             }}
             placeholder="Start typing plain text..."
-            className="w-full min-h-full bg-transparent resize-none overflow-hidden focus:outline-none text-zinc-400 leading-relaxed font-mono text-sm"
+            className="min-h-full w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-zinc-400 focus:outline-none"
           />
         )}
       </div>
 
       {/* Footer Info */}
-      <footer className="px-6 py-2 border-t border-zinc-900 bg-black flex justify-between items-center text-[10px] text-zinc-600 uppercase tracking-widest font-bold">
+      <footer className="flex items-center justify-between border-t border-zinc-900 bg-black px-6 py-2 text-[10px] font-bold tracking-widest text-zinc-600 uppercase">
         <div className="flex items-center gap-4">
           <span>Synced: {new Date(note.updatedAt).toLocaleTimeString()}</span>
           <span className="text-zinc-800">&bull;</span>
           <span>{note.id}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>{note.mode}</span>
+          <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>
+            {note.mode}
+          </span>
           <span className="text-zinc-800">&bull;</span>
           <span>{getNoteTextContent(note.content).length} chars</span>
         </div>

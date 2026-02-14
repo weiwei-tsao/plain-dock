@@ -1,12 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { serializeNote } from '@/lib/serialize';
 
 // GET /api/notes/:id — Get full note detail (including content)
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const note = await prisma.note.findUnique({ where: { id } });
   if (!note) {
@@ -16,20 +14,14 @@ export async function GET(
 }
 
 // PUT /api/notes/:id — Update note
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await request.json();
   const { title, content, textContent, mode, isPinned } = body;
 
   // Validate mode
   if (mode !== undefined && mode !== 'PLAIN' && mode !== 'RICH') {
-    return NextResponse.json(
-      { error: 'Invalid mode. Must be PLAIN or RICH.' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'Invalid mode. Must be PLAIN or RICH.' }, { status: 400 });
   }
 
   const existing = await prisma.note.findUnique({ where: { id } });

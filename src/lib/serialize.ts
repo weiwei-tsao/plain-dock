@@ -1,7 +1,7 @@
 import 'server-only';
 import type { Note as PrismaNote } from '@prisma/client';
 import type { Note } from '@/types';
-import { NoteMode } from '@/types';
+import type { NoteMode } from '@/types';
 
 export function serializeNote(note: PrismaNote): Note {
   return {

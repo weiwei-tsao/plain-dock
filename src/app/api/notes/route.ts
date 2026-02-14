@@ -9,9 +9,11 @@ export async function GET() {
     orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
   });
 
-  return NextResponse.json(notes.map(n => ({
-    ...serializeNote({ ...n, content: '' }),
-  })));
+  return NextResponse.json(
+    notes.map((n) => ({
+      ...serializeNote({ ...n, content: '' }),
+    })),
+  );
 }
 
 // POST /api/notes — Create a new empty note

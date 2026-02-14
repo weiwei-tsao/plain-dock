@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { COOKIE_NAME } from '@/lib/constants';
 
 // JWT verification inline (can't import server-only module in middleware edge runtime)

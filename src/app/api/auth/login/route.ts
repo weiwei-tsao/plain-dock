@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { signToken, COOKIE_NAME, MAX_AGE } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {

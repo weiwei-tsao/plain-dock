@@ -44,6 +44,11 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
 | `npm run dev` | Start dev server (Turbopack) on port 3000 |
 | `npm run build` | Production build |
 | `npm run start` | Start production server on port 3000 |
+| `npm run lint` | ESLint check |
+| `npm run lint:fix` | ESLint auto-fix |
+| `npm run format` | Prettier format |
+| `npm run format:check` | Prettier check (no write) |
+| `npm run typecheck` | TypeScript type check |
 | `npx prisma migrate dev` | Create/apply database migrations |
 | `npx prisma studio` | Browse the database via GUI |
 
