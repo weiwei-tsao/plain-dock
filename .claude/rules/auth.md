@@ -10,14 +10,15 @@
 ## JWT Handling
 
 - Sign and verify tokens using `jsonwebtoken` via `@/lib/auth` (server-only).
-- Secret from `JWT_SECRET` env var.
+- Secret from `JWT_SECRET` env var — **must** be set; the app throws at startup if missing.
 - `signToken()` returns a signed JWT; `verifyToken(token)` returns boolean.
+- **Never hardcode secrets or provide fallback values** for `JWT_SECRET`, `APP_PASSWORD`, or any credential. Missing env vars must cause a loud failure, not silent degradation.
 
 ## Middleware (`src/middleware.ts`)
 
 - Runs in Edge Runtime — cannot use `jsonwebtoken` or any Node.js-only module.
-- Performs lightweight JWT validation only: structure check (3 parts) + expiry check.
-- Full cryptographic verification happens in API route handlers.
+- Performs full HMAC-SHA256 JWT signature verification using the Web Crypto API (`crypto.subtle`).
+- Also checks JWT structure (3 parts) and `exp` claim.
 - Public paths (no auth required): `/login`, `/api/auth/*`.
 - Unauthenticated API requests get `401 JSON`; unauthenticated page requests redirect to `/login`.
 
