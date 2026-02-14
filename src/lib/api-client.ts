@@ -31,6 +31,6 @@ export const noteApi = {
   },
 
   async delete(id: string): Promise<void> {
-    await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+    await request(`/api/notes/${id}`, { method: 'DELETE' });
   },
 };
