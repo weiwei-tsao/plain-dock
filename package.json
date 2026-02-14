@@ -11,10 +11,10 @@
   "dependencies": {
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "lucide-react": "0.344.0",
-    "@tiptap/react": "2.2.4",
-    "@tiptap/starter-kit": "2.2.4",
-    "@tiptap/extension-underline": "2.2.4"
+    "lucide-react": "^0.564.0",
+    "@tiptap/react": "^2.27.2",
+    "@tiptap/starter-kit": "^2.27.2",
+    "@tiptap/extension-underline": "^2.27.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
