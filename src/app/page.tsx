@@ -6,6 +6,11 @@ import { noteApi } from '@/lib/api-client';
 import Sidebar from '@/components/sidebar/Sidebar';
 import EditorCanvas from '@/components/editor/EditorCanvas';
 
+/**
+ * Renders the main notes application page with a sidebar and editor and manages notes state (list, active note, search, and sidebar visibility).
+ *
+ * @returns The React element for the main page UI.
+ */
 export default function MainPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);

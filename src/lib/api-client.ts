@@ -1,5 +1,13 @@
 import type { Note, NotePayload } from '@/types';
 
+/**
+ * Perform an HTTP request and return the parsed JSON response, throwing on non-2xx responses.
+ *
+ * @param url - The request URL
+ * @param options - Fetch options forwarded to `fetch`
+ * @returns The response body parsed as JSON typed as `T`
+ * @throws An `Error` with the server-provided `error` message or `Request failed: <status>` when the response status is not in the 200–299 range
+ */
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, options);
   if (!res.ok) {

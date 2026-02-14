@@ -11,6 +11,17 @@
 import { ALLOWED_TAGS, ALLOWED_STYLES, DANGEROUS_TAGS } from './config';
 import { TAG_NORMALIZE_MAP } from './normalize';
 
+/**
+ * Produce a sanitized, normalized HTML string safe for rendering in a simple content container.
+ *
+ * Performs three logical transformations: removes dangerous elements, normalizes certain tags to a consistent set,
+ * and downgrades complex structures (tables → paragraph rows, media → textual placeholders). The output preserves
+ * only allowlisted tags and CSS properties; anchor `href` values are restricted to `http`/`mailto`, anchors get
+ * `target="_blank"`, and `rel` is merged to include `noopener noreferrer`.
+ *
+ * @param rawHTML - The input HTML to sanitize; may be empty or whitespace.
+ * @returns The cleaned HTML string suitable for insertion into an HTML container.
+ */
 export function sanitizeHTML(rawHTML: string): string {
   if (!rawHTML || rawHTML.trim() === '') return '';
 
@@ -119,6 +130,14 @@ export function sanitizeHTML(rawHTML: string): string {
   return container.innerHTML;
 }
 
+/**
+ * Convert plain text into basic HTML paragraphs, treating blank lines as paragraph breaks.
+ *
+ * Normalizes CRLF to LF, splits the text into paragraphs on one or more blank lines, converts single newlines within paragraphs to `<br>`, and wraps each paragraph in `<p>` tags. The input is not trimmed.
+ *
+ * @param text - The plain-text input to convert
+ * @returns An HTML string where each paragraph is wrapped in `<p>` and internal newlines are rendered as `<br>`
+ */
 export function wrapPlainText(text: string): string {
   // PRD 2.2.A: Normalize \r\n -> \n, no trim on overall text
   const normalized = text.replace(/\r\n/g, '\n');
@@ -128,6 +147,12 @@ export function wrapPlainText(text: string): string {
   return paragraphs.map((p) => `<p>${p.split('\n').join('<br>')}</p>`).join('');
 }
 
+/**
+ * Extracts the plain text content from an HTML string.
+ *
+ * @param html - The HTML markup to parse and extract text from
+ * @returns The concatenated text content of the parsed HTML, or an empty string if there is no text
+ */
 export function getNoteTextContent(html: string): string {
   const tmp = document.createElement('div');
   tmp.innerHTML = html;

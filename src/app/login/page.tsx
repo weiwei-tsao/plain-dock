@@ -3,6 +3,13 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+/**
+ * Render the login page with a password input that authenticates against the server and navigates to the app on success.
+ *
+ * Manages local password, error, and loading state and presents inline feedback for authentication failures.
+ *
+ * @returns The React element for the password-based login page.
+ */
 export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
