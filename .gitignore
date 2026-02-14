@@ -16,6 +16,8 @@ dist
 *.db-journal
 *.db-shm
 *.db-wal
+prisma/dev.db-wal
+prisma/dev.db-shm
 data/
 
 # Logs
