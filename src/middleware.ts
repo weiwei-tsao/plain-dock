@@ -2,17 +2,38 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { COOKIE_NAME } from '@/lib/constants';
 
-// JWT verification inline (can't import server-only module in middleware edge runtime)
+/**
+ * Edge-compatible JWT HMAC-SHA256 signature verification using Web Crypto API.
+ * Replaces the previous structure-only check that allowed forged tokens.
+ */
 async function isValidToken(token: string): Promise<boolean> {
-  // Middleware runs in Edge Runtime which doesn't support jsonwebtoken.
-  // We do a simple JWT structure + expiry check here.
-  // The full crypto verification happens in API routes.
   try {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) return false;
+
     const parts = token.split('.');
     if (parts.length !== 3) return false;
+
+    // Decode and check expiry
     const payload = JSON.parse(atob(parts[1]));
     if (payload.exp && payload.exp < Date.now() / 1000) return false;
-    return true;
+
+    // Verify HMAC-SHA256 signature via Web Crypto API
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify'],
+    );
+
+    // JWT signature is base64url-encoded — convert to standard base64 for atob
+    const signatureB64 = parts[2].replace(/-/g, '+').replace(/_/g, '/');
+    const signatureBytes = Uint8Array.from(atob(signatureB64), (c) => c.charCodeAt(0));
+
+    const data = encoder.encode(`${parts[0]}.${parts[1]}`);
+    return await crypto.subtle.verify('HMAC', key, signatureBytes, data);
   } catch {
     return false;
   }
