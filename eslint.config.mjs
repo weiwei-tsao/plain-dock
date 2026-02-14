@@ -8,13 +8,12 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,
+  reactHooks.configs['recommended-latest'],
   {
     plugins: {
-      'react-hooks': reactHooks,
       '@next/next': nextPlugin,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
       ...nextPlugin.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': [
         'error',
