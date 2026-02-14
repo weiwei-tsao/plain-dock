@@ -13,8 +13,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL="file:./dev.db"
-RUN npx prisma migrate deploy && npm run build
+ENV DATABASE_URL="file:./build.db"
+RUN npx prisma migrate deploy && npm run build && rm -f build.db
 
 # --- Production ---
 FROM base AS runner
@@ -31,6 +31,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
@@ -39,4 +40,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
