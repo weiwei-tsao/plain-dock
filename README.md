@@ -56,11 +56,22 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
 
 ## Docker Deployment
 
-```bash
-docker compose up -d
-```
+1. Create a `.env` file with your secrets:
+   ```
+   APP_PASSWORD="your-password"
+   JWT_SECRET="your-secret"
+   ```
+2. Build and start the container:
+   ```bash
+   docker compose up -d
+   ```
+3. The app runs at `http://localhost:3000`.
 
-Requires `APP_PASSWORD` and `JWT_SECRET` environment variables. SQLite data is persisted to `./data` via a volume mount.
+**Notes:**
+- SQLite data is persisted to `./data` on the host via a volume mount — safe across restarts and rebuilds.
+- The container runs migrations automatically on startup.
+- To stop: `docker compose down`
+- To rebuild after code changes: `docker compose up -d --build`
 
 ## Tech Stack
 

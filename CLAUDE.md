@@ -26,10 +26,12 @@ No test runner is configured.
 
 ## Environment Variables
 
-Set in `.env` or `.env.local` (both gitignored):
+**Local development** — set all three in `.env` (recommended) or `.env.local` (both gitignored):
 - `DATABASE_URL` — Prisma connection string (default: `file:./dev.db` → `prisma/dev.db`)
 - `APP_PASSWORD` — Single shared password for login
 - `JWT_SECRET` — Secret for signing JWT tokens
+
+**Docker** — only `APP_PASSWORD` and `JWT_SECRET` are needed in `.env`; `DATABASE_URL` is hardcoded in `docker-compose.yml` as `file:/app/data/notes.db`.
 
 **Important:** Prisma CLI reads `.env` by default. If using `.env.local`, add `--env-file .env.local` to Prisma commands. Next.js reads both files (with `.env.local` taking precedence).
 
@@ -69,6 +71,32 @@ Client-side 3-layer HTML sanitization pipeline for pasted content:
 
 Allowlisted tags and styles defined in `config.ts`.
 
-## Docker Deployment
+## Running the App
 
-`Dockerfile` uses multi-stage build (deps → build → standalone runner). `docker-compose.yml` mounts `./data` for persistent SQLite storage. Requires `APP_PASSWORD` and `JWT_SECRET` env vars.
+### Local (without Docker)
+
+```bash
+npm install
+npx prisma migrate dev   # only needed once, or after schema changes
+npm run dev              # dev mode with hot reload
+# OR
+npm run build && npm run start  # production mode
+```
+
+- Requires Node.js installed on the machine.
+- Migrations must be run manually.
+- Database lives at `prisma/dev.db`.
+
+### Docker
+
+```bash
+docker compose up -d           # build image and start container
+docker compose down            # stop
+docker compose up -d --build   # rebuild after code changes
+```
+
+- Requires Docker installed. No Node.js needed on the host.
+- Migrations run automatically on container startup.
+- Database is persisted to `./data/notes.db` via volume mount.
+- `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
+- Container auto-restarts on crash (`restart: unless-stopped`).
