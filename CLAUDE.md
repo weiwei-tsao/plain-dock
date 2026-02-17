@@ -26,10 +26,12 @@ No test runner is configured.
 
 ## Environment Variables
 
-Set in `.env.local` (gitignored):
+Set in `.env` or `.env.local` (both gitignored):
 - `DATABASE_URL` — Prisma connection string (default: `file:./dev.db` → `prisma/dev.db`)
 - `APP_PASSWORD` — Single shared password for login
 - `JWT_SECRET` — Secret for signing JWT tokens
+
+**Important:** Prisma CLI reads `.env` by default. If using `.env.local`, add `--env-file .env.local` to Prisma commands. Next.js reads both files (with `.env.local` taking precedence).
 
 ## Architecture
 

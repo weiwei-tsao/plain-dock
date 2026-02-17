@@ -21,12 +21,14 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
    ```
    npm install
    ```
-2. Set up environment variables in `.env.local`:
+2. Set up environment variables in `.env`:
    ```
    DATABASE_URL="file:./dev.db"
    APP_PASSWORD="your-password"
    JWT_SECRET="your-secret"
    ```
+   **Note:** Prisma CLI reads `.env` by default. If you use `.env.local`, add the `--env-file .env.local` flag to Prisma commands. Both files are gitignored.
+
 3. Run the initial database migration:
    ```
    npx prisma migrate dev
