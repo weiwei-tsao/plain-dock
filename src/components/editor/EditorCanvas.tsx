@@ -41,17 +41,17 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete })
         class: 'prose prose-invert max-w-none focus:outline-none min-h-[400px]',
       },
       handlePaste: (view, event) => {
-        if (note.mode === NoteMode.PLAIN) return false;
+        if (note.mode === NoteMode.PLAIN || !editor) return false;
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain');
 
         if (html && html.trim() !== '') {
           const clean = sanitizeHTML(html);
-          editor?.commands.insertContent(clean);
+          editor.commands.insertContent(clean);
           return true;
         } else if (text) {
           const clean = wrapPlainText(text);
-          editor?.commands.insertContent(clean);
+          editor.commands.insertContent(clean);
           return true;
         }
         return false;
