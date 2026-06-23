@@ -12,6 +12,7 @@ export default function MainPage() {
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
 
   const loadNotes = useCallback(async () => {
     const data = await noteApi.list();
@@ -34,10 +35,16 @@ export default function MainPage() {
       .catch(() => setActiveNote(null));
   }, [activeNoteId]);
 
+  const handleSelectNote = useCallback((id: string) => {
+    setActiveNoteId(id);
+    setMobileView('editor');
+  }, []);
+
   const handleCreateNote = async () => {
     const newNote = await noteApi.create();
     setNotes((prev) => [newNote, ...prev]);
     setActiveNoteId(newNote.id);
+    setMobileView('editor');
   };
 
   const handleDeleteNote = async (id: string) => {
@@ -45,6 +52,7 @@ export default function MainPage() {
     setNotes((prev) => prev.filter((n) => n.id !== id));
     if (activeNoteId === id) {
       setActiveNoteId(null);
+      setMobileView('list');
     }
   };
 
@@ -55,23 +63,30 @@ export default function MainPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-black font-sans text-zinc-100">
-      <Sidebar
-        notes={notes}
-        activeNoteId={activeNoteId}
-        onSelectNote={setActiveNoteId}
-        onCreateNote={handleCreateNote}
-        searchQuery={searchQuery}
-        onSearch={setSearchQuery}
-        isOpen={isSidebarOpen}
-        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-      />
+      {/* Sidebar: transparent wrapper on tablet+, hidden on phone when in editor view */}
+      <div className={mobileView === 'editor' ? 'hidden md:contents' : 'contents'}>
+        <Sidebar
+          notes={notes}
+          activeNoteId={activeNoteId}
+          onSelectNote={handleSelectNote}
+          onCreateNote={handleCreateNote}
+          searchQuery={searchQuery}
+          onSearch={setSearchQuery}
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        />
+      </div>
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-900/30">
+      {/* Editor: hidden on phone when in list view */}
+      <main
+        className={`${mobileView === 'list' ? 'hidden md:flex' : 'flex'} min-w-0 flex-1 flex-col overflow-hidden bg-zinc-900/30`}
+      >
         {activeNote ? (
           <EditorCanvas
             note={activeNote}
             onUpdate={handleUpdateNoteLocally}
             onDelete={() => handleDeleteNote(activeNote.id)}
+            onBack={() => setMobileView('list')}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">
