@@ -53,6 +53,7 @@ No test runner is configured.
 | `/new-api-route` | Scaffold a new API route with all project conventions and boilerplate |
 | `/deploy` | Pre-deploy quality gate + Docker build and container launch |
 | `/extend-sanitizer` | Add allowed tags, dangerous tags, CSS properties, or tag normalizations to the sanitizer |
+| `/create-pr` | Draft a PR title (≤ 12 words) and description (≤ 60 words) against a specified target branch |
 
 ### Server-side
 
