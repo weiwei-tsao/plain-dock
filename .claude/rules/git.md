@@ -8,7 +8,7 @@ type(scope): description
 
 - **type**: `feat`, `fix`, `refactor`, `docs`, `style`, `chore`, `test`
 - **scope**: matches project areas — `api`, `auth`, `db`, `editor`, `sidebar`, `sanitizer`, `docker`, `config`
-- **description**: imperative mood, lowercase, no period at end
+- **description**: imperative mood, lowercase, no period at end, **≤ 12 words**
 
 Examples:
 ```
