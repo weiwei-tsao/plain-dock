@@ -161,7 +161,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
     if (note.mode === NoteMode.RICH) {
       setShowModeConfirm(true);
     } else {
-      const richHTML = wrapPlainText(editor?.getText() || '');
+      const richHTML = wrapPlainText(plainContentRef.current);
       editor?.commands.setContent(richHTML);
       persistChange({
         content: richHTML,
@@ -184,24 +184,25 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   };
 
   const copyToClipboard = async (isHTML: boolean = false) => {
-    if (!editor) return;
+    const plainText =
+      note.mode === NoteMode.PLAIN ? plainContentRef.current : editor?.getText() ?? '';
     try {
       if (isHTML && note.mode === NoteMode.RICH) {
+        if (!editor) return;
         const html = editor.getHTML();
-        const text = editor.getText();
         const blobHTML = new Blob([html], { type: 'text/html' });
-        const blobText = new Blob([text], { type: 'text/plain' });
+        const blobText = new Blob([plainText], { type: 'text/plain' });
         await navigator.clipboard.write([
           new ClipboardItem({ 'text/html': blobHTML, 'text/plain': blobText }),
         ]);
         setToast({ message: 'Rich text copied!', variant: 'success' });
       } else {
-        await navigator.clipboard.writeText(editor.getText());
+        await navigator.clipboard.writeText(plainText);
         setToast({ message: 'Plain text copied!', variant: 'success' });
       }
     } catch {
       try {
-        await navigator.clipboard.writeText(editor.getText());
+        await navigator.clipboard.writeText(plainText);
         setToast({
           message: 'Copying rich text failed, plain text copied instead.',
           variant: 'error',
