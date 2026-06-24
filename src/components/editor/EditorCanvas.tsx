@@ -194,11 +194,15 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
         setToast({ message: 'Plain text copied!', variant: 'success' });
       }
     } catch {
-      await navigator.clipboard.writeText(editor.getText());
-      setToast({
-        message: 'Copying rich text failed, plain text copied instead.',
-        variant: 'error',
-      });
+      try {
+        await navigator.clipboard.writeText(editor.getText());
+        setToast({
+          message: 'Copying rich text failed, plain text copied instead.',
+          variant: 'error',
+        });
+      } catch {
+        setToast({ message: 'Clipboard access denied.', variant: 'error' });
+      }
     }
   };
 
