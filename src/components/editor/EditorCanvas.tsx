@@ -186,7 +186,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
 
   const copyToClipboard = async (isHTML: boolean = false) => {
     const plainText =
-      note.mode === NoteMode.PLAIN ? plainContentRef.current : editor?.getText() ?? '';
+      note.mode === NoteMode.PLAIN ? plainContentRef.current : (editor?.getText() ?? '');
     try {
       if (isHTML && note.mode === NoteMode.RICH) {
         if (!editor) return;
