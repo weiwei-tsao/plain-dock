@@ -26,16 +26,34 @@ No test runner is configured.
 
 ## Environment Variables
 
-Set in `.env.local` (gitignored):
+**Local development** — set all three in `.env` (recommended) or `.env.local` (both gitignored):
 - `DATABASE_URL` — Prisma connection string (default: `file:./dev.db` → `prisma/dev.db`)
 - `APP_PASSWORD` — Single shared password for login
 - `JWT_SECRET` — Secret for signing JWT tokens
+
+**Docker** — only `APP_PASSWORD` and `JWT_SECRET` are needed in `.env`; `DATABASE_URL` is hardcoded in `docker-compose.yml` as `file:/app/data/notes.db`.
+
+**Important:** Prisma CLI reads `.env` by default. If using `.env.local`, add `--env-file .env.local` to Prisma commands. Next.js reads both files (with `.env.local` taking precedence).
 
 ## Architecture
 
 **Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite, Tailwind CSS v4 (PostCSS plugin), Tiptap rich text editor, Lucide icons. Docker-ready with standalone output.
 
 **Path alias:** `@/*` maps to `./src/*`.
+
+**Detailed conventions** are in `.claude/rules/` (api, auth, components, database, docker, git, nextjs, sanitizer, styling) — these are auto-loaded by Claude Code and cover patterns not repeated here.
+
+**Available skills** — invoke with `/skill-name`:
+
+| Skill | When to use |
+|-------|-------------|
+| `/git-commit` | Stage, validate quality gate, and create a Conventional Commits message (≤ 12 words) |
+| `/db-migrate` | Full Prisma schema change workflow — migrate, generate, sync types, verify |
+| `/add-note-field` | Add a new field to the Note model across all 6 affected files |
+| `/new-api-route` | Scaffold a new API route with all project conventions and boilerplate |
+| `/deploy` | Pre-deploy quality gate + Docker build and container launch |
+| `/extend-sanitizer` | Add allowed tags, dangerous tags, CSS properties, or tag normalizations to the sanitizer |
+| `/create-pr` | Draft a PR title (≤ 12 words) and description (≤ 60 words) against a specified target branch |
 
 ### Server-side
 
@@ -51,12 +69,24 @@ Set in `.env.local` (gitignored):
 
 ### Client-side
 
-- `src/app/page.tsx` — Main page (`'use client'`). Manages note list state; fetches full note content on selection via separate GET.
+- `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `isSidebarOpen`, and `mobileView` (`'list' | 'editor'`) state. `mobileView` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. On tablet/desktop both panels are always visible via `md:contents`/`md:flex` overrides.
 - `src/app/login/page.tsx` — Login form, calls `/api/auth/login`, redirects to `/` on success.
 - `src/lib/api-client.ts` — Typed fetch wrapper (`noteApi`) for all `/api/notes` endpoints.
-- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: Tiptap for RICH, `<textarea>` for PLAIN. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Handles paste sanitization, mode switching, pin toggle, clipboard copy (plain + rich HTML).
-- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for Tiptap (bold, italic, underline, strike, headings, lists, code block, blockquote, clear formatting).
-- `src/components/sidebar/Sidebar.tsx` — Note list with search filtering, pin indicators, collapsible panel.
+- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: Tiptap for RICH, `<textarea>` for PLAIN. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Handles paste sanitization, mode switching, pin toggle, clipboard copy (plain + rich HTML). Accepts optional `onBack` prop (used on phones for back navigation). Header has two rows on phone: title + back button on top, save/pin/mode/overflow-menu on second row; single row on tablet/desktop.
+- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for Tiptap. Horizontally scrollable single row on phone; wraps on tablet/desktop.
+- `src/components/sidebar/Sidebar.tsx` — Note list with search filtering, pin indicators. Width is `w-full md:w-56 lg:w-80`. Collapse toggle is hidden on phone (navigation is handled by `mobileView` in `page.tsx`).
+
+### Responsive Design
+
+Three-tier layout using Tailwind CSS v4 defaults — no custom breakpoints:
+
+| Tier    | Prefix | Width     | Layout                                      |
+|---------|--------|-----------|---------------------------------------------|
+| Phone   | —      | < 768px   | Stacked: sidebar OR editor, one at a time   |
+| Tablet  | `md:`  | 768–1023px | Side-by-side; sidebar `w-56`               |
+| Desktop | `lg:`  | 1024px+   | Side-by-side; sidebar `w-80`                |
+
+No centralized theme or CSS variables — colors are inline Tailwind classes. ProseMirror/Tiptap styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the full design rationale and trade-offs.
 
 ### Sanitizer (`src/lib/sanitizer/`)
 
@@ -67,6 +97,32 @@ Client-side 3-layer HTML sanitization pipeline for pasted content:
 
 Allowlisted tags and styles defined in `config.ts`.
 
-## Docker Deployment
+## Running the App
 
-`Dockerfile` uses multi-stage build (deps → build → standalone runner). `docker-compose.yml` mounts `./data` for persistent SQLite storage. Requires `APP_PASSWORD` and `JWT_SECRET` env vars.
+### Local (without Docker)
+
+```bash
+npm install
+npx prisma migrate dev   # only needed once, or after schema changes
+npm run dev              # dev mode with hot reload
+# OR
+npm run build && npm run start  # production mode
+```
+
+- Requires Node.js installed on the machine.
+- Migrations must be run manually.
+- Database lives at `prisma/dev.db`.
+
+### Docker
+
+```bash
+docker compose up -d           # build image and start container
+docker compose down            # stop
+docker compose up -d --build   # rebuild after code changes
+```
+
+- Requires Docker installed. No Node.js needed on the host.
+- Migrations run automatically on container startup.
+- Database is persisted to `./data/notes.db` via volume mount.
+- `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
+- Container auto-restarts on crash (`restart: unless-stopped`).

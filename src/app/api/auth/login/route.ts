@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
   }
 
   const token = signToken();
-  const isLocalhost = request.headers.get('host')?.startsWith('localhost') ?? false;
 
   const response = NextResponse.json({ success: true });
   response.cookies.set(COOKIE_NAME, token, {
@@ -18,7 +17,7 @@ export async function POST(request: NextRequest) {
     sameSite: 'lax',
     maxAge: MAX_AGE,
     path: '/',
-    secure: !isLocalhost,
+    secure: process.env.NODE_ENV === 'production',
   });
 
   return response;
