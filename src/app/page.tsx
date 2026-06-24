@@ -29,6 +29,7 @@ export default function MainPage() {
       setActiveNote(null);
       return;
     }
+    setActiveNote(null);
     noteApi
       .get(activeNoteId)
       .then(setActiveNote)
