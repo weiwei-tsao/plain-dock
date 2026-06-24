@@ -175,6 +175,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
     setShowModeConfirm(false);
     const plainText = editor?.getText() || '';
     setPlainContent(plainText);
+    plainContentRef.current = plainText;
     editor?.commands.setContent(plainText);
     persistChange({
       content: plainText,
