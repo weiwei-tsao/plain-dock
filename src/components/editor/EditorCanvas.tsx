@@ -44,6 +44,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const syncedNoteIdRef = useRef<string | null>(null);
 
   const editor = useEditor({
     extensions: [StarterKit, Underline],
@@ -76,13 +77,15 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
     },
   });
 
-  // Sync editor content when switching notes
+  // Sync editor content when switching notes — not on every save round-trip.
+  // note.content changes after each save (onUpdate propagates the server response),
+  // which would re-run this effect and call setContent, jumping the cursor.
+  // The ref guard ensures setContent only fires when the note ID actually changes.
   useEffect(() => {
-    if (editor && note.id) {
-      const currentContent = note.mode === NoteMode.RICH ? editor.getHTML() : editor.getText();
-      if (note.content !== currentContent) {
-        editor.commands.setContent(note.content, false);
-      }
+    if (syncedNoteIdRef.current === note.id) return;
+    syncedNoteIdRef.current = note.id;
+    if (editor) {
+      editor.commands.setContent(note.content, false);
     }
     setLocalTitle(note.title);
     setPlainContent(note.content);
