@@ -33,10 +33,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`relative flex flex-col border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-80' : 'w-0'}`}
+      className={`relative flex flex-col border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-full md:w-0'}`}
     >
       <div
-        className={`flex h-full flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+        className={`flex h-full flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-100 md:opacity-0'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-zinc-800 p-4">
@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search (Cmd + /)"
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
               className="w-full rounded-md border border-zinc-800 bg-zinc-900 py-2 pr-3 pl-9 text-sm transition-colors focus:border-zinc-700 focus:outline-none"
@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={note.id}
                   onClick={() => onSelectNote(note.id)}
-                  className={`group relative w-full rounded-lg p-3 text-left transition-all ${
+                  className={`group relative w-full rounded-lg p-4 text-left transition-all md:p-3 ${
                     activeNoteId === note.id
                       ? 'bg-zinc-800 text-white'
                       : 'text-zinc-400 hover:bg-zinc-900'
@@ -106,10 +106,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Toggle Button */}
+      {/* Toggle Button — tablet/desktop only */}
       <button
         onClick={onToggle}
-        className="absolute top-1/2 -right-3 z-50 -translate-y-1/2 rounded-full border border-zinc-800 bg-zinc-900 p-1 text-zinc-500 shadow-xl transition-colors hover:text-white"
+        className="absolute top-1/2 -right-3 z-50 hidden -translate-y-1/2 rounded-full border border-zinc-800 bg-zinc-900 p-1 text-zinc-500 shadow-xl transition-colors hover:text-white md:block"
       >
         {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
       </button>
