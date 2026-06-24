@@ -45,6 +45,8 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
   const syncedNoteIdRef = useRef<string | null>(null);
+  // Ref so triggerSave always reads current plain content without a stale closure
+  const plainContentRef = useRef(note.content);
 
   const editor = useEditor({
     extensions: [StarterKit, Underline],
@@ -89,6 +91,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
     }
     setLocalTitle(note.title);
     setPlainContent(note.content);
+    plainContentRef.current = note.content;
     setSaveState('IDLE');
   }, [note.id, note.title, editor, note.content, note.mode]);
 
@@ -124,7 +127,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
       saveTimeoutRef.current = setTimeout(() => {
         const content =
           updates.content ??
-          (note.mode === NoteMode.RICH ? editor?.getHTML() : editor?.getText()) ??
+          (note.mode === NoteMode.RICH ? editor?.getHTML() : plainContentRef.current) ??
           '';
         const payload: NotePayload = {
           title: updates.title ?? localTitle,
@@ -405,7 +408,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
             onChange={(e) => {
               const val = e.target.value;
               setPlainContent(val);
-              editor?.commands.setContent(val);
+              plainContentRef.current = val;
               triggerSave({ content: val });
             }}
             placeholder="Start typing plain text..."
