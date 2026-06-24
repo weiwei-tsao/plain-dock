@@ -43,6 +43,17 @@ No test runner is configured.
 
 **Detailed conventions** are in `.claude/rules/` (api, auth, components, database, docker, git, nextjs, sanitizer, styling) — these are auto-loaded by Claude Code and cover patterns not repeated here.
 
+**Available skills** — invoke with `/skill-name`:
+
+| Skill | When to use |
+|-------|-------------|
+| `/git-commit` | Stage, validate quality gate, and create a Conventional Commits message (≤ 12 words) |
+| `/db-migrate` | Full Prisma schema change workflow — migrate, generate, sync types, verify |
+| `/add-note-field` | Add a new field to the Note model across all 6 affected files |
+| `/new-api-route` | Scaffold a new API route with all project conventions and boilerplate |
+| `/deploy` | Pre-deploy quality gate + Docker build and container launch |
+| `/extend-sanitizer` | Add allowed tags, dangerous tags, CSS properties, or tag normalizations to the sanitizer |
+
 ### Server-side
 
 - `prisma/schema.prisma` — Single `Note` model (SQLite). Fields: id, title, content, textContent, mode, isPinned, createdAt, updatedAt.
