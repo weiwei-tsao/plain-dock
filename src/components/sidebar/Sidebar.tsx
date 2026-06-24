@@ -33,10 +33,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`relative flex flex-col border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-0'}`}
+      className={`relative flex flex-col border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-full md:w-0'}`}
     >
       <div
-        className={`flex h-full flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+        className={`flex h-full flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-100 md:opacity-0'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-zinc-800 p-4">
