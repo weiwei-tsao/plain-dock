@@ -2,7 +2,8 @@
 
 import React from 'react';
 import type { Note } from '@/types';
-import { Search, Plus, Pin, Layout, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Pin, ChevronLeft, ChevronRight } from 'lucide-react';
+import PlainDockIcon from '@/components/ui/PlainDockIcon';
 
 interface SidebarProps {
   notes: Note[];
@@ -41,7 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between gap-4 border-b border-zinc-800 p-4">
           <div className="flex items-center gap-2 overflow-hidden">
-            <Layout className="h-5 w-5 shrink-0 text-indigo-400" />
+            <PlainDockIcon className="h-5 w-5 shrink-0 text-indigo-400" />
             <span className="truncate font-semibold">PlainDock</span>
           </div>
           <button
