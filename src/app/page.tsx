@@ -70,7 +70,7 @@ export default function MainPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-black font-sans text-zinc-100">
+    <div className="fixed inset-0 flex overflow-hidden bg-black font-sans text-zinc-100">
       {/* Sidebar: transparent wrapper on tablet+, hidden on phone when in editor view */}
       <div className={mobileView === 'editor' ? 'hidden md:contents' : 'contents'}>
         <Sidebar
@@ -82,6 +82,7 @@ export default function MainPage() {
           onSearch={setSearchQuery}
           isOpen={isSidebarOpen}
           onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          onRefresh={loadNotes}
         />
       </div>
 

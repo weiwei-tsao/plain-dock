@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Note } from '@/types';
-import { Search, Plus, Pin, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, Pin, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import PlainDockIcon from '@/components/ui/PlainDockIcon';
 
 interface SidebarProps {
@@ -14,7 +14,10 @@ interface SidebarProps {
   onSearch: (q: string) => void;
   isOpen: boolean;
   onToggle: () => void;
+  onRefresh: () => Promise<void>;
 }
+
+const PULL_THRESHOLD = 50;
 
 const Sidebar: React.FC<SidebarProps> = ({
   notes,
@@ -25,16 +28,61 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSearch,
   isOpen,
   onToggle,
+  onRefresh,
 }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullY, setPullY] = useState(0);
+  const touchStartY = useRef(0);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Non-passive listener so we can call preventDefault and block native overscroll
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const onMove = (e: TouchEvent) => {
+      if (el.scrollTop > 0) return;
+      const dy = e.touches[0].clientY - touchStartY.current;
+      if (dy > 0) {
+        e.preventDefault();
+        setPullY(Math.min(dy * 0.45, 64));
+      }
+    };
+
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onMove);
+  }, []);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullY >= PULL_THRESHOLD) {
+      setPullY(0);
+      setIsRefreshing(true);
+      try {
+        await onRefresh();
+      } finally {
+        setIsRefreshing(false);
+      }
+    } else {
+      setPullY(0);
+    }
+  };
+
   const filteredNotes = notes.filter(
     (n) =>
       n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       n.textContent.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const indicatorHeight = isRefreshing ? 40 : Math.round(pullY * 0.7);
+  const spinnerOpacity = Math.min(pullY / PULL_THRESHOLD, 1);
+
   return (
     <aside
-      className={`relative flex flex-col border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-full md:w-0'}`}
+      className={`relative flex h-full flex-col overflow-hidden border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-full md:w-0'}`}
     >
       <div
         className={`flex h-full flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-100 md:opacity-0'}`}
@@ -67,8 +115,24 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
+        {/* Pull-to-refresh indicator — sits between search and list */}
+        <div
+          className="flex items-center justify-center overflow-hidden transition-[height] duration-200"
+          style={{ height: indicatorHeight }}
+        >
+          <Loader2
+            className={`h-4 w-4 text-indigo-400 ${isRefreshing ? 'animate-spin' : ''}`}
+            style={{ opacity: isRefreshing ? 1 : spinnerOpacity }}
+          />
+        </div>
+
         {/* List */}
-        <div className="flex-1 overflow-y-auto px-2 pb-4">
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto overscroll-contain px-2 pb-4"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {filteredNotes.length === 0 ? (
             <div className="mt-10 text-center text-sm text-zinc-600">No notes found</div>
           ) : (
