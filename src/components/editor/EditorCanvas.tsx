@@ -57,6 +57,8 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
       },
       handlePaste: (view, event) => {
         if (note.mode === NoteMode.PLAIN || !editor) return false;
+        // Inside a code block, let Tiptap handle paste natively (plain text only)
+        if (editor.isActive('codeBlock')) return false;
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain');
 

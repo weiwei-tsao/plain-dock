@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Note } from '@/types';
 import { noteApi } from '@/lib/api-client';
+
+const sortNotes = (list: Note[]): Note[] =>
+  [...list].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
 import Sidebar from '@/components/sidebar/Sidebar';
 import EditorCanvas from '@/components/editor/EditorCanvas';
 
@@ -43,9 +49,10 @@ export default function MainPage() {
 
   const handleCreateNote = async () => {
     const newNote = await noteApi.create();
-    setNotes((prev) => [newNote, ...prev]);
+    setNotes((prev) => sortNotes([newNote, ...prev]));
     setActiveNoteId(newNote.id);
     setMobileView('editor');
+    loadNotes().catch(() => {});
   };
 
   const handleDeleteNote = async (id: string) => {
@@ -58,7 +65,7 @@ export default function MainPage() {
   };
 
   const handleUpdateNoteLocally = (updatedNote: Note) => {
-    setNotes((prev) => prev.map((n) => (n.id === updatedNote.id ? updatedNote : n)));
+    setNotes((prev) => sortNotes(prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))));
     setActiveNote(updatedNote);
   };
 
