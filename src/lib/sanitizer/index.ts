@@ -28,6 +28,20 @@ export function sanitizeHTML(rawHTML: string): string {
     });
   }
 
+  // Normalize code block whitespace: strip leading/trailing \n injected by HTML formatters
+  // e.g. <pre><code>\ncontent\n</code></pre> → <pre><code>content</code></pre>
+  doc.querySelectorAll('pre').forEach((pre) => {
+    const target = pre.querySelector('code') ?? pre;
+    const first = target.firstChild;
+    const last = target.lastChild;
+    if (first?.nodeType === Node.TEXT_NODE && first.textContent !== null) {
+      first.textContent = first.textContent.replace(/^\n/, '');
+    }
+    if (last?.nodeType === Node.TEXT_NODE && last.textContent !== null) {
+      last.textContent = last.textContent.replace(/\n$/, '');
+    }
+  });
+
   // Layer 3: Structure Downgrade — Tables
   doc.querySelectorAll('table').forEach((table) => {
     const rows = Array.from(table.querySelectorAll('tr'));
