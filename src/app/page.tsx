@@ -43,9 +43,10 @@ export default function MainPage() {
 
   const handleCreateNote = async () => {
     const newNote = await noteApi.create();
-    await loadNotes();
+    setNotes((prev) => [newNote, ...prev]);
     setActiveNoteId(newNote.id);
     setMobileView('editor');
+    loadNotes().catch(() => {});
   };
 
   const handleDeleteNote = async (id: string) => {
