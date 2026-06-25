@@ -41,15 +41,9 @@ export default function MainPage() {
     setMobileView('editor');
   }, []);
 
-  const sortNotes = (list: Note[]) =>
-    [...list].sort((a, b) => {
-      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
-
   const handleCreateNote = async () => {
     const newNote = await noteApi.create();
-    setNotes((prev) => sortNotes([newNote, ...prev]));
+    await loadNotes();
     setActiveNoteId(newNote.id);
     setMobileView('editor');
   };
@@ -64,7 +58,7 @@ export default function MainPage() {
   };
 
   const handleUpdateNoteLocally = (updatedNote: Note) => {
-    setNotes((prev) => sortNotes(prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))));
+    loadNotes();
     setActiveNote(updatedNote);
   };
 
