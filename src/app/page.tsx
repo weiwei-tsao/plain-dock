@@ -58,7 +58,12 @@ export default function MainPage() {
   };
 
   const handleUpdateNoteLocally = (updatedNote: Note) => {
-    loadNotes();
+    setNotes((prev) =>
+      [...prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))].sort((a, b) => {
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }),
+    );
     setActiveNote(updatedNote);
   };
 
