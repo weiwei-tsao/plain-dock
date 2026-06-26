@@ -66,6 +66,7 @@ function nodeToText(node: TiptapNode): string {
     return `[image: ${alt || 'embedded-image.webp'}]`;
   }
   if (node.type === 'text') return node.text ?? '';
+  if (node.type === 'hardBreak') return '\n';
   if (!node.content?.length) return '';
   const inner = node.content.map(nodeToText).join('');
   return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
