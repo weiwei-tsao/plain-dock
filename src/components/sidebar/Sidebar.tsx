@@ -82,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      className={`relative flex h-full flex-col overflow-hidden border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-full md:w-0'}`}
+      className={`relative flex h-full flex-col border-r border-zinc-800 transition-all duration-300 ${isOpen ? 'w-full md:w-56 lg:w-80' : 'w-full md:w-0'}`}
     >
       <div
         className={`flex h-full flex-col overflow-hidden ${isOpen ? 'opacity-100' : 'opacity-100 md:opacity-0'}`}
@@ -174,7 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Toggle Button — tablet/desktop only */}
       <button
         onClick={onToggle}
-        className="absolute top-1/2 -right-3 z-50 hidden -translate-y-1/2 rounded-full border border-zinc-800 bg-zinc-900 p-1 text-zinc-500 shadow-xl transition-colors hover:text-white md:block"
+        className={`absolute top-1/2 z-50 hidden -translate-y-1/2 rounded-full border border-zinc-800 bg-zinc-900 p-1 text-zinc-500 shadow-xl transition-colors hover:text-white md:block ${isOpen ? '-right-3' : 'right-0 translate-x-full'}`}
       >
         {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
       </button>
