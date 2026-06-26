@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
+import Image from '@tiptap/extension-image';
 import type { Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
@@ -22,6 +23,34 @@ import {
   ChevronLeft,
   MoreHorizontal,
 } from 'lucide-react';
+
+async function resizeImageToDataURL(file: File, maxDimension = 1200): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas 2d context unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/webp', 0.85));
+    };
+    img.onerror = reject;
+    img.src = objectUrl;
+  });
+}
 
 interface EditorCanvasProps {
   note: Note;
@@ -49,7 +78,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const plainContentRef = useRef(note.content);
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline],
+    extensions: [StarterKit, Underline, Image],
     content: note.content,
     editorProps: {
       attributes: {
@@ -59,6 +88,19 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
         if (note.mode === NoteMode.PLAIN || !editor) return false;
         // Inside a code block, let Tiptap handle paste natively (plain text only)
         if (editor.isActive('codeBlock')) return false;
+
+        const items = Array.from(event.clipboardData?.items ?? []);
+        const imageItem = items.find((item) => item.type.startsWith('image/'));
+        if (imageItem) {
+          const file = imageItem.getAsFile();
+          if (file) {
+            resizeImageToDataURL(file).then((dataUrl) => {
+              editor.chain().focus().setImage({ src: dataUrl }).run();
+            });
+            return true;
+          }
+        }
+
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain');
 
@@ -414,6 +456,26 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
               setPlainContent(val);
               plainContentRef.current = val;
               triggerSave({ content: val });
+            }}
+            onPaste={(e) => {
+              const items = Array.from(e.clipboardData?.items ?? []);
+              const imageItem = items.find((item) => item.type.startsWith('image/'));
+              if (imageItem) {
+                e.preventDefault();
+                const file = imageItem.getAsFile();
+                const name = file?.name || 'clipboard-image.png';
+                const ta = textareaRef.current;
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const placeholder = `[image: ${name}]`;
+                  const newVal =
+                    plainContent.slice(0, start) + placeholder + plainContent.slice(end);
+                  setPlainContent(newVal);
+                  plainContentRef.current = newVal;
+                  triggerSave({ content: newVal });
+                }
+              }
             }}
             placeholder="Start typing plain text..."
             className="min-h-full w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-zinc-400 focus:outline-none"
