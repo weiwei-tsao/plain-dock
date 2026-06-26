@@ -117,10 +117,19 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
           const file = imageItem.getAsFile();
           if (file) {
             const pasteNoteId = syncedNoteIdRef.current;
+            const pasteFrom = view.state.selection.from;
             resizeImageToDataURL(file).then((dataUrl) => {
               if (syncedNoteIdRef.current !== pasteNoteId) return;
               if (currentModeRef.current !== NoteMode.RICH) return;
-              editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run();
+              const insertPos = Math.min(pasteFrom, editor.state.doc.content.size);
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(insertPos, {
+                  type: 'image',
+                  attrs: { src: dataUrl, alt: file.name },
+                })
+                .run();
             });
             return true;
           }
