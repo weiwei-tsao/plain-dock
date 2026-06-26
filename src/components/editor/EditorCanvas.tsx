@@ -96,6 +96,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const syncedNoteIdRef = useRef<string | null>(null);
   // Ref so triggerSave always reads current plain content without a stale closure
   const plainContentRef = useRef(note.content);
+  const currentModeRef = useRef(note.mode);
 
   const editor = useEditor({
     extensions: [StarterKit, Underline, Image],
@@ -114,7 +115,10 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
         if (imageItem) {
           const file = imageItem.getAsFile();
           if (file) {
+            const pasteNoteId = syncedNoteIdRef.current;
             resizeImageToDataURL(file).then((dataUrl) => {
+              if (syncedNoteIdRef.current !== pasteNoteId) return;
+              if (currentModeRef.current !== NoteMode.RICH) return;
               editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run();
             });
             return true;
@@ -148,6 +152,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   // which would re-run this effect and call setContent, jumping the cursor.
   // The ref guard ensures setContent only fires when the note ID actually changes.
   useEffect(() => {
+    currentModeRef.current = note.mode;
     if (syncedNoteIdRef.current === note.id) return;
     syncedNoteIdRef.current = note.id;
     if (editor) {
