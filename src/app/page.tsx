@@ -42,18 +42,36 @@ export default function MainPage() {
       .catch(() => setActiveNote(null));
   }, [activeNoteId]);
 
-  const handleSelectNote = useCallback((id: string) => {
-    setActiveNoteId(id);
-    setMobileView('editor');
-  }, []);
+  const cleanupEmptyNote = useCallback(async () => {
+    if (activeNote && activeNote.title.trim() === '' && activeNote.textContent.trim() === '') {
+      await noteApi.delete(activeNote.id);
+      setNotes((prev) => prev.filter((n) => n.id !== activeNote.id));
+    }
+  }, [activeNote]);
 
-  const handleCreateNote = async () => {
+  const handleSelectNote = useCallback(
+    async (id: string) => {
+      await cleanupEmptyNote();
+      setActiveNoteId(id);
+      setMobileView('editor');
+    },
+    [cleanupEmptyNote],
+  );
+
+  const handleBack = useCallback(async () => {
+    await cleanupEmptyNote();
+    setActiveNoteId(null);
+    setMobileView('list');
+  }, [cleanupEmptyNote]);
+
+  const handleCreateNote = useCallback(async () => {
+    await cleanupEmptyNote();
     const newNote = await noteApi.create();
     setNotes((prev) => sortNotes([newNote, ...prev]));
     setActiveNoteId(newNote.id);
     setMobileView('editor');
     loadNotes().catch(() => {});
-  };
+  }, [cleanupEmptyNote, loadNotes]);
 
   const handleDeleteNote = async (id: string) => {
     await noteApi.delete(id);
@@ -105,7 +123,7 @@ export default function MainPage() {
             note={activeNote}
             onUpdate={handleUpdateNoteLocally}
             onDelete={() => handleDeleteNote(activeNote.id)}
-            onBack={() => setMobileView('list')}
+            onBack={handleBack}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">
