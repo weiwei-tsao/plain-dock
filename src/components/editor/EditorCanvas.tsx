@@ -24,7 +24,7 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 
-async function resizeImageToDataURL(file: File, maxDimension = 1200): Promise<string> {
+async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
     const objectUrl = URL.createObjectURL(file);
