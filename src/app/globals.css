@@ -95,3 +95,14 @@ body {
   color: #a1a1aa;
   font-style: italic;
 }
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+  margin: 0.75rem 0;
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}

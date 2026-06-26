@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
+import Image from '@tiptap/extension-image';
 import type { Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
@@ -23,6 +24,54 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 
+async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      let { width, height } = img;
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas 2d context unavailable'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/webp', 0.85));
+    };
+    img.onerror = reject;
+    img.src = objectUrl;
+  });
+}
+
+type TiptapNode = {
+  type?: string;
+  text?: string;
+  content?: TiptapNode[];
+  attrs?: Record<string, unknown>;
+};
+const BLOCK_NODE_TYPES = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock']);
+
+function nodeToText(node: TiptapNode): string {
+  if (node.type === 'image') {
+    const alt = node.attrs?.alt as string | undefined;
+    return `[image: ${alt || 'embedded-image.webp'}]`;
+  }
+  if (node.type === 'text') return node.text ?? '';
+  if (node.type === 'hardBreak') return '\n';
+  if (!node.content?.length) return '';
+  const inner = node.content.map(nodeToText).join('');
+  return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
+}
+
 interface EditorCanvasProps {
   note: Note;
   onUpdate: (note: Note) => void;
@@ -36,6 +85,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const [plainContent, setPlainContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -47,9 +97,10 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const syncedNoteIdRef = useRef<string | null>(null);
   // Ref so triggerSave always reads current plain content without a stale closure
   const plainContentRef = useRef(note.content);
+  const currentModeRef = useRef(note.mode);
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline],
+    extensions: [StarterKit, Underline, Image.configure({ allowBase64: true })],
     content: note.content,
     editorProps: {
       attributes: {
@@ -59,6 +110,31 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
         if (note.mode === NoteMode.PLAIN || !editor) return false;
         // Inside a code block, let Tiptap handle paste natively (plain text only)
         if (editor.isActive('codeBlock')) return false;
+
+        const items = Array.from(event.clipboardData?.items ?? []);
+        const imageItem = items.find((item) => item.type.startsWith('image/'));
+        if (imageItem) {
+          const file = imageItem.getAsFile();
+          if (file) {
+            const pasteNoteId = syncedNoteIdRef.current;
+            const pasteFrom = view.state.selection.from;
+            resizeImageToDataURL(file).then((dataUrl) => {
+              if (syncedNoteIdRef.current !== pasteNoteId) return;
+              if (currentModeRef.current !== NoteMode.RICH) return;
+              const insertPos = Math.min(pasteFrom, editor.state.doc.content.size);
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(insertPos, {
+                  type: 'image',
+                  attrs: { src: dataUrl, alt: file.name },
+                })
+                .run();
+            });
+            return true;
+          }
+        }
+
         const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain');
 
@@ -86,6 +162,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   // which would re-run this effect and call setContent, jumping the cursor.
   // The ref guard ensures setContent only fires when the note ID actually changes.
   useEffect(() => {
+    currentModeRef.current = note.mode;
     if (syncedNoteIdRef.current === note.id) return;
     syncedNoteIdRef.current = note.id;
     if (editor) {
@@ -161,6 +238,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
 
   const handleSwitchMode = () => {
     if (note.mode === NoteMode.RICH) {
+      setModeConfirmHasImages(editor?.getHTML().includes('<img') ?? false);
       setShowModeConfirm(true);
     } else {
       const richHTML = wrapPlainText(plainContentRef.current);
@@ -175,7 +253,8 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
 
   const confirmSwitchToPlain = () => {
     setShowModeConfirm(false);
-    const plainText = editor?.getText() || '';
+    const json = editor?.getJSON() as TiptapNode | undefined;
+    const plainText = json ? nodeToText(json).trim() : '';
     setPlainContent(plainText);
     plainContentRef.current = plainText;
     editor?.commands.setContent(plainText);
@@ -415,6 +494,26 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
               plainContentRef.current = val;
               triggerSave({ content: val });
             }}
+            onPaste={(e) => {
+              const items = Array.from(e.clipboardData?.items ?? []);
+              const imageItem = items.find((item) => item.type.startsWith('image/'));
+              if (imageItem) {
+                e.preventDefault();
+                const file = imageItem.getAsFile();
+                const name = file?.name || 'clipboard-image.png';
+                const ta = textareaRef.current;
+                if (ta) {
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const placeholder = `[image: ${name}]`;
+                  const newVal =
+                    plainContent.slice(0, start) + placeholder + plainContent.slice(end);
+                  setPlainContent(newVal);
+                  plainContentRef.current = newVal;
+                  triggerSave({ content: newVal });
+                }
+              }
+            }}
             placeholder="Start typing plain text..."
             className="min-h-full w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-zinc-400 focus:outline-none"
           />
@@ -453,7 +552,11 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
       <ConfirmDialog
         open={showModeConfirm}
         title="Switch to Plain Text"
-        message="Switching to plain text will permanently remove formatting and save immediately. Continue?"
+        message={
+          modeConfirmHasImages
+            ? 'Switching to plain text will permanently remove formatting and embedded images. Images will be replaced with placeholders. Continue?'
+            : 'Switching to plain text will permanently remove formatting and save immediately. Continue?'
+        }
         variant="warning"
         confirmLabel="Switch"
         onConfirm={confirmSwitchToPlain}
