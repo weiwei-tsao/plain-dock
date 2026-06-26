@@ -110,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
-              className="w-full rounded-md border border-zinc-800 bg-zinc-900 py-2 pr-3 pl-9 text-sm transition-colors focus:border-zinc-700 focus:outline-none"
+              className="w-full rounded-md border border-zinc-800 bg-zinc-900 py-2 pr-3 pl-9 text-base transition-colors focus:border-zinc-700 focus:outline-none"
             />
           </div>
         </div>
