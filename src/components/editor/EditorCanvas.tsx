@@ -317,88 +317,16 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
             className="min-w-0 flex-1 bg-transparent text-lg font-medium text-zinc-100 placeholder-zinc-800 focus:outline-none md:text-xl"
           />
 
-          {/* Tablet/Desktop controls */}
-          <div className="hidden shrink-0 items-center gap-2 md:flex">
-            <div className="mr-2 flex items-center">
+          {/* Mobile action group — pin, mode, overflow */}
+          <div className="flex shrink-0 items-center gap-1 md:hidden">
+            <div className="flex items-center px-1">
               {saveState === 'SAVING' && (
-                <div className="mr-2 h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+                <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
               )}
-              {saveState === 'SAVED' && <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />}
-              {saveState === 'FAILED' && <AlertCircle className="mr-2 h-4 w-4 text-red-500" />}
-              <span className="text-[10px] font-bold tracking-wider text-zinc-600 uppercase">
-                {saveState === 'IDLE' ? '' : saveState}
-              </span>
+              {saveState === 'SAVED' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+              {saveState === 'FAILED' && <AlertCircle className="h-4 w-4 text-red-500" />}
             </div>
 
-            <button
-              onClick={handleTogglePin}
-              className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
-              title="Pin note"
-            >
-              <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
-            </button>
-
-            <button
-              onClick={handleSwitchMode}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-                note.mode === NoteMode.RICH
-                  ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
-                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
-              title="Switch Mode (Cmd+Shift+P)"
-            >
-              {note.mode === NoteMode.RICH ? (
-                <FileCode className="h-4 w-4" />
-              ) : (
-                <Type className="h-4 w-4" />
-              )}
-              {note.mode}
-            </button>
-
-            <div className="mx-1 h-6 w-px bg-zinc-800" />
-
-            <button
-              onClick={() => copyToClipboard(false)}
-              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-              title="Copy Plain"
-            >
-              <Copy className="h-4 w-4" />
-            </button>
-
-            {note.mode === NoteMode.RICH && (
-              <button
-                onClick={() => copyToClipboard(true)}
-                className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-indigo-400/10 hover:text-indigo-400"
-                title="Copy Rich (HTML)"
-              >
-                <Copy className="h-4 w-4" />
-                <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                  HTML
-                </span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-red-400/10 hover:text-red-400"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Phone action bar — second row */}
-        <div className="flex items-center justify-between px-4 pb-2 md:hidden">
-          <div className="flex items-center">
-            {saveState === 'SAVING' && (
-              <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-            )}
-            {saveState === 'SAVED' && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-            {saveState === 'FAILED' && <AlertCircle className="h-4 w-4 text-red-500" />}
-          </div>
-
-          <div className="flex items-center gap-1">
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2.5 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
@@ -471,6 +399,76 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
                 </>
               )}
             </div>
+          </div>
+
+          {/* Tablet/Desktop controls */}
+          <div className="hidden shrink-0 items-center gap-2 md:flex">
+            <div className="mr-2 flex items-center">
+              {saveState === 'SAVING' && (
+                <div className="mr-2 h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
+              )}
+              {saveState === 'SAVED' && <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />}
+              {saveState === 'FAILED' && <AlertCircle className="mr-2 h-4 w-4 text-red-500" />}
+              <span className="text-[10px] font-bold tracking-wider text-zinc-600 uppercase">
+                {saveState === 'IDLE' ? '' : saveState}
+              </span>
+            </div>
+
+            <button
+              onClick={handleTogglePin}
+              className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
+              title="Pin note"
+            >
+              <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
+            </button>
+
+            <button
+              onClick={handleSwitchMode}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
+                note.mode === NoteMode.RICH
+                  ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
+                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+              title="Switch Mode (Cmd+Shift+P)"
+            >
+              {note.mode === NoteMode.RICH ? (
+                <FileCode className="h-4 w-4" />
+              ) : (
+                <Type className="h-4 w-4" />
+              )}
+              {note.mode}
+            </button>
+
+            <div className="mx-1 h-6 w-px bg-zinc-800" />
+
+            <button
+              onClick={() => copyToClipboard(false)}
+              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+              title="Copy Plain"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+
+            {note.mode === NoteMode.RICH && (
+              <button
+                onClick={() => copyToClipboard(true)}
+                className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-indigo-400/10 hover:text-indigo-400"
+                title="Copy Rich (HTML)"
+              >
+                <Copy className="h-4 w-4" />
+                <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                  HTML
+                </span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-red-400/10 hover:text-red-400"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </header>
