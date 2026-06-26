@@ -52,6 +52,25 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
   });
 }
 
+type TiptapNode = {
+  type?: string;
+  text?: string;
+  content?: TiptapNode[];
+  attrs?: Record<string, unknown>;
+};
+const BLOCK_NODE_TYPES = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock']);
+
+function nodeToText(node: TiptapNode): string {
+  if (node.type === 'image') {
+    const alt = node.attrs?.alt as string | undefined;
+    return `[image: ${alt || 'embedded-image.webp'}]`;
+  }
+  if (node.type === 'text') return node.text ?? '';
+  if (!node.content?.length) return '';
+  const inner = node.content.map(nodeToText).join('');
+  return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
+}
+
 interface EditorCanvasProps {
   note: Note;
   onUpdate: (note: Note) => void;
@@ -65,6 +84,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const [plainContent, setPlainContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
+  const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -95,7 +115,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
           const file = imageItem.getAsFile();
           if (file) {
             resizeImageToDataURL(file).then((dataUrl) => {
-              editor.chain().focus().setImage({ src: dataUrl }).run();
+              editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run();
             });
             return true;
           }
@@ -203,6 +223,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
 
   const handleSwitchMode = () => {
     if (note.mode === NoteMode.RICH) {
+      setModeConfirmHasImages(editor?.getHTML().includes('<img') ?? false);
       setShowModeConfirm(true);
     } else {
       const richHTML = wrapPlainText(plainContentRef.current);
@@ -217,7 +238,8 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
 
   const confirmSwitchToPlain = () => {
     setShowModeConfirm(false);
-    const plainText = editor?.getText() || '';
+    const json = editor?.getJSON() as TiptapNode | undefined;
+    const plainText = json ? nodeToText(json).trim() : '';
     setPlainContent(plainText);
     plainContentRef.current = plainText;
     editor?.commands.setContent(plainText);
@@ -515,7 +537,11 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
       <ConfirmDialog
         open={showModeConfirm}
         title="Switch to Plain Text"
-        message="Switching to plain text will permanently remove formatting and save immediately. Continue?"
+        message={
+          modeConfirmHasImages
+            ? 'Switching to plain text will permanently remove formatting and embedded images. Images will be replaced with placeholders. Continue?'
+            : 'Switching to plain text will permanently remove formatting and save immediately. Continue?'
+        }
         variant="warning"
         confirmLabel="Switch"
         onConfirm={confirmSwitchToPlain}
