@@ -99,7 +99,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
   const currentModeRef = useRef(note.mode);
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline, Image],
+    extensions: [StarterKit, Underline, Image.configure({ allowBase64: true })],
     content: note.content,
     editorProps: {
       attributes: {
