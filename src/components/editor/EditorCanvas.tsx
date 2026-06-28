@@ -239,9 +239,11 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     ref,
     () => ({
       getCurrentState: () => {
-        const content =
-          note.mode === NoteMode.RICH ? (editor?.getHTML() ?? '') : plainContentRef.current;
-        return { title: localTitle, textContent: getNoteTextContent(content) };
+        const textContent =
+          note.mode === NoteMode.RICH
+            ? nodeToText((editor?.getJSON() ?? {}) as TiptapNode)
+            : getNoteTextContent(plainContentRef.current);
+        return { title: localTitle, textContent };
       },
     }),
     [localTitle, note.mode, editor],
