@@ -9,7 +9,7 @@ generator client {
 
 model Note {
   id          String   @id @default(cuid())
-  title       String   @default("Untitled")
+  title       String   @default("")
   content     String   @default("")
   textContent String   @default("")
   mode        String   @default("PLAIN")

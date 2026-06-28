@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Note } from '@/types';
 import { noteApi } from '@/lib/api-client';
 
@@ -10,7 +10,7 @@ const sortNotes = (list: Note[]): Note[] =>
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 import Sidebar from '@/components/sidebar/Sidebar';
-import EditorCanvas from '@/components/editor/EditorCanvas';
+import EditorCanvas, { type EditorCanvasHandle } from '@/components/editor/EditorCanvas';
 
 export default function MainPage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -19,6 +19,7 @@ export default function MainPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
+  const editorRef = useRef<EditorCanvasHandle>(null);
 
   const loadNotes = useCallback(async () => {
     const data = await noteApi.list();
@@ -42,18 +43,40 @@ export default function MainPage() {
       .catch(() => setActiveNote(null));
   }, [activeNoteId]);
 
-  const handleSelectNote = useCallback((id: string) => {
-    setActiveNoteId(id);
-    setMobileView('editor');
-  }, []);
+  const cleanupEmptyNote = useCallback(async () => {
+    if (!activeNote) return;
+    const current = editorRef.current?.getCurrentState();
+    const title = current?.title ?? activeNote.title;
+    const textContent = current?.textContent ?? activeNote.textContent;
+    if (title.trim() === '' && textContent.trim() === '') {
+      await noteApi.delete(activeNote.id);
+      setNotes((prev) => prev.filter((n) => n.id !== activeNote.id));
+    }
+  }, [activeNote]);
 
-  const handleCreateNote = async () => {
+  const handleSelectNote = useCallback(
+    async (id: string) => {
+      if (id !== activeNoteId) await cleanupEmptyNote();
+      setActiveNoteId(id);
+      setMobileView('editor');
+    },
+    [activeNoteId, cleanupEmptyNote],
+  );
+
+  const handleBack = useCallback(async () => {
+    await cleanupEmptyNote();
+    setActiveNoteId(null);
+    setMobileView('list');
+  }, [cleanupEmptyNote]);
+
+  const handleCreateNote = useCallback(async () => {
+    await cleanupEmptyNote();
     const newNote = await noteApi.create();
     setNotes((prev) => sortNotes([newNote, ...prev]));
     setActiveNoteId(newNote.id);
     setMobileView('editor');
     loadNotes().catch(() => {});
-  };
+  }, [cleanupEmptyNote, loadNotes]);
 
   const handleDeleteNote = async (id: string) => {
     await noteApi.delete(id);
@@ -102,10 +125,11 @@ export default function MainPage() {
       >
         {activeNote ? (
           <EditorCanvas
+            ref={editorRef}
             note={activeNote}
             onUpdate={handleUpdateNoteLocally}
             onDelete={() => handleDeleteNote(activeNote.id)}
-            onBack={() => setMobileView('list')}
+            onBack={handleBack}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">
