@@ -56,11 +56,11 @@ export default function MainPage() {
 
   const handleSelectNote = useCallback(
     async (id: string) => {
-      await cleanupEmptyNote();
+      if (id !== activeNoteId) await cleanupEmptyNote();
       setActiveNoteId(id);
       setMobileView('editor');
     },
-    [cleanupEmptyNote],
+    [activeNoteId, cleanupEmptyNote],
   );
 
   const handleBack = useCallback(async () => {
