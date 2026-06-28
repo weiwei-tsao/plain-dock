@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { Note } from '@/types';
 import { noteApi } from '@/lib/api-client';
 
@@ -10,7 +10,7 @@ const sortNotes = (list: Note[]): Note[] =>
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 import Sidebar from '@/components/sidebar/Sidebar';
-import EditorCanvas from '@/components/editor/EditorCanvas';
+import EditorCanvas, { type EditorCanvasHandle } from '@/components/editor/EditorCanvas';
 
 export default function MainPage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -19,6 +19,7 @@ export default function MainPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
+  const editorRef = useRef<EditorCanvasHandle>(null);
 
   const loadNotes = useCallback(async () => {
     const data = await noteApi.list();
@@ -43,7 +44,11 @@ export default function MainPage() {
   }, [activeNoteId]);
 
   const cleanupEmptyNote = useCallback(async () => {
-    if (activeNote && activeNote.title.trim() === '' && activeNote.textContent.trim() === '') {
+    if (!activeNote) return;
+    const current = editorRef.current?.getCurrentState();
+    const title = current?.title ?? activeNote.title;
+    const textContent = current?.textContent ?? activeNote.textContent;
+    if (title.trim() === '' && textContent.trim() === '') {
       await noteApi.delete(activeNote.id);
       setNotes((prev) => prev.filter((n) => n.id !== activeNote.id));
     }
@@ -120,6 +125,7 @@ export default function MainPage() {
       >
         {activeNote ? (
           <EditorCanvas
+            ref={editorRef}
             note={activeNote}
             onUpdate={handleUpdateNoteLocally}
             onDelete={() => handleDeleteNote(activeNote.id)}

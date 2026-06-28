@@ -1,6 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -79,7 +86,14 @@ interface EditorCanvasProps {
   onBack?: () => void;
 }
 
-const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, onBack }) => {
+export interface EditorCanvasHandle {
+  getCurrentState: () => { title: string; textContent: string };
+}
+
+const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function EditorCanvas(
+  { note, onUpdate, onDelete, onBack },
+  ref,
+) {
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
   const [localTitle, setLocalTitle] = useState(note.title);
   const [plainContent, setPlainContent] = useState(note.content);
@@ -219,6 +233,18 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
       }, 1000);
     },
     [localTitle, note.mode, note.isPinned, persistChange, editor],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getCurrentState: () => {
+        const content =
+          note.mode === NoteMode.RICH ? (editor?.getHTML() ?? '') : plainContentRef.current;
+        return { title: localTitle, textContent: getNoteTextContent(content) };
+      },
+    }),
+    [localTitle, note.mode, editor],
   );
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -569,6 +595,6 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ note, onUpdate, onDelete, o
       />
     </div>
   );
-};
+});
 
 export default EditorCanvas;
