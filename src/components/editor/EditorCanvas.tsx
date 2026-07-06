@@ -341,7 +341,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             type="text"
             value={localTitle}
             onChange={handleTitleChange}
-            placeholder="Note Title"
+            placeholder="Untitled"
             className="min-w-0 flex-1 bg-transparent text-lg font-medium text-zinc-100 placeholder-zinc-800 focus:outline-none md:text-xl"
           />
 
