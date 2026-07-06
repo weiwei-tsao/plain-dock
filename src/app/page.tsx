@@ -19,6 +19,7 @@ export default function MainPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
+  const [autoFocusNote, setAutoFocusNote] = useState(false);
   const editorRef = useRef<EditorCanvasHandle>(null);
 
   const loadNotes = useCallback(async () => {
@@ -74,6 +75,7 @@ export default function MainPage() {
     const newNote = await noteApi.create();
     setNotes((prev) => sortNotes([newNote, ...prev]));
     setActiveNoteId(newNote.id);
+    setAutoFocusNote(true);
     setMobileView('editor');
     loadNotes().catch(() => {});
   }, [cleanupEmptyNote, loadNotes]);
@@ -130,6 +132,8 @@ export default function MainPage() {
             onUpdate={handleUpdateNoteLocally}
             onDelete={() => handleDeleteNote(activeNote.id)}
             onBack={handleBack}
+            autoFocus={autoFocusNote}
+            onAutoFocusHandled={() => setAutoFocusNote(false)}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">

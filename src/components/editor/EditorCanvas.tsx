@@ -84,6 +84,8 @@ interface EditorCanvasProps {
   onUpdate: (note: Note) => void;
   onDelete: () => void;
   onBack?: () => void;
+  autoFocus?: boolean;
+  onAutoFocusHandled?: () => void;
 }
 
 export interface EditorCanvasHandle {
@@ -91,7 +93,7 @@ export interface EditorCanvasHandle {
 }
 
 const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function EditorCanvas(
-  { note, onUpdate, onDelete, onBack },
+  { note, onUpdate, onDelete, onBack, autoFocus, onAutoFocusHandled },
   ref,
 ) {
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
@@ -186,7 +188,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     setPlainContent(note.content);
     plainContentRef.current = note.content;
     setSaveState('IDLE');
-  }, [note.id, note.title, editor, note.content, note.mode]);
+    if (autoFocus) {
+      if (note.mode === NoteMode.RICH) {
+        editor?.commands.focus();
+      } else {
+        textareaRef.current?.focus();
+      }
+      onAutoFocusHandled?.();
+    }
+  }, [note.id, note.title, editor, note.content, note.mode, autoFocus, onAutoFocusHandled]);
 
   // Auto-resize textarea to match content height
   useEffect(() => {
@@ -341,7 +351,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             type="text"
             value={localTitle}
             onChange={handleTitleChange}
-            placeholder="Note Title"
+            placeholder="Untitled"
             className="min-w-0 flex-1 bg-transparent text-lg font-medium text-zinc-100 placeholder-zinc-800 focus:outline-none md:text-xl"
           />
 
