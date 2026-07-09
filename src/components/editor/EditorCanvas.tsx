@@ -99,6 +99,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
   const [localTitle, setLocalTitle] = useState(note.title);
   const [plainContent, setPlainContent] = useState(note.content);
+  const [richText, setRichText] = useState(() => getNoteTextContent(note.content));
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
@@ -168,6 +169,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     },
     onUpdate: ({ editor: ed }) => {
       if (note.mode === NoteMode.RICH) {
+        setRichText(ed.getText());
         triggerSave({ content: ed.getHTML() });
       }
     },
@@ -187,6 +189,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     setLocalTitle(note.title);
     setPlainContent(note.content);
     plainContentRef.current = note.content;
+    setRichText(getNoteTextContent(note.content));
     setSaveState('IDLE');
     if (autoFocus) {
       if (note.mode === NoteMode.RICH) {
@@ -332,6 +335,11 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       }
     }
   };
+
+  const statsText = note.mode === NoteMode.RICH ? richText : plainContent;
+  const trimmedStatsText = statsText.trim();
+  const wordCount = trimmedStatsText ? trimmedStatsText.split(/\s+/).length : 0;
+  const charCount = statsText.length;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
@@ -560,15 +568,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       <footer className="hidden items-center justify-between border-t border-zinc-900 bg-black px-6 py-2 text-[10px] font-bold tracking-widest text-zinc-600 uppercase md:flex">
         <div className="flex items-center gap-4">
           <span>Synced: {new Date(note.updatedAt).toLocaleTimeString()}</span>
-          <span className="text-zinc-800">&bull;</span>
-          <span>{note.id}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>
             {note.mode}
           </span>
           <span className="text-zinc-800">&bull;</span>
-          <span>{getNoteTextContent(note.content).length} chars</span>
+          <span>{wordCount} Words</span>
+          <span className="text-zinc-800">&bull;</span>
+          <span>{charCount} Characters</span>
         </div>
       </footer>
 
