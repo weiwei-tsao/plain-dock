@@ -333,7 +333,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     }
   };
 
-  const statsText = note.mode === NoteMode.RICH ? (editor?.getText() ?? '') : plainContent;
+  const statsText =
+    note.mode === NoteMode.RICH ? (editor?.getText({ blockSeparator: '' }) ?? '') : plainContent;
   const trimmedStatsText = statsText.trim();
   const wordCount = trimmedStatsText ? trimmedStatsText.split(/\s+/).length : 0;
   const charCount = statsText.length;
