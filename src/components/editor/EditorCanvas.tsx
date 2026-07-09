@@ -99,7 +99,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
   const [localTitle, setLocalTitle] = useState(note.title);
   const [plainContent, setPlainContent] = useState(note.content);
-  const [richText, setRichText] = useState(() => getNoteTextContent(note.content));
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
@@ -169,7 +168,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     },
     onUpdate: ({ editor: ed }) => {
       if (note.mode === NoteMode.RICH) {
-        setRichText(ed.getText());
         triggerSave({ content: ed.getHTML() });
       }
     },
@@ -189,7 +187,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     setLocalTitle(note.title);
     setPlainContent(note.content);
     plainContentRef.current = note.content;
-    setRichText(getNoteTextContent(note.content));
     setSaveState('IDLE');
     if (autoFocus) {
       if (note.mode === NoteMode.RICH) {
@@ -336,7 +333,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     }
   };
 
-  const statsText = note.mode === NoteMode.RICH ? richText : plainContent;
+  const statsText = note.mode === NoteMode.RICH ? (editor?.getText() ?? '') : plainContent;
   const trimmedStatsText = statsText.trim();
   const wordCount = trimmedStatsText ? trimmedStatsText.split(/\s+/).length : 0;
   const charCount = statsText.length;
