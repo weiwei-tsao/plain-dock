@@ -204,6 +204,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
