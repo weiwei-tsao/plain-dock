@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is PlainDock
 
-PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (semantic HTML via Tiptap) mode. Pasted HTML content goes through a 3-layer sanitization pipeline (security stripping → tag normalization → structure downgrade). Data is persisted to SQLite via Prisma. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
+PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (semantic HTML via Tiptap) mode. Pasted HTML content goes through a 3-layer sanitization pipeline (security stripping → tag normalization → structure downgrade). Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
 
 ## Development Commands
 
@@ -26,18 +26,24 @@ No test runner is configured.
 
 ## Environment Variables
 
-**Local development** — set all three in `.env` (recommended) or `.env.local` (both gitignored):
-- `DATABASE_URL` — Prisma connection string (default: `file:./dev.db` → `prisma/dev.db`)
-- `APP_PASSWORD` — Single shared password for login
-- `JWT_SECRET` — Secret for signing JWT tokens
+**Local development** - set all three in `.env` (recommended) or `.env.local` (both gitignored):
+- `DATABASE_URL` - Prisma connection string (default: `file:./dev.db`, stored at `prisma/dev.db`)
+- `APP_PASSWORD` - Single shared password for login
+- `JWT_SECRET` - Secret for signing JWT tokens
 
-**Docker** — only `APP_PASSWORD` and `JWT_SECRET` are needed in `.env`; `DATABASE_URL` is hardcoded in `docker-compose.yml` as `file:/app/data/notes.db`.
+**Docker** - only `APP_PASSWORD` and `JWT_SECRET` are needed in `.env`; `DATABASE_URL` is hardcoded in `docker-compose.yml` as `file:/app/data/notes.db`.
 
-**Important:** Prisma CLI reads `.env` by default. If using `.env.local`, add `--env-file .env.local` to Prisma commands. Next.js reads both files (with `.env.local` taking precedence).
+**Vercel + Turso** - set all four in Vercel project settings:
+- `DATABASE_URL` - Turso/libSQL connection string, e.g. `libsql://your-db.turso.io`
+- `TURSO_AUTH_TOKEN` - Turso database auth token
+- `APP_PASSWORD` - Single shared password for login
+- `JWT_SECRET` - Secret for signing JWT tokens
+
+**Important:** Prisma CLI reads `.env` by default. If using `.env.local`, add `--env-file .env.local` to Prisma commands. Next.js reads both files (with `.env.local` taking precedence). `TURSO_AUTH_TOKEN` is required only when `DATABASE_URL` points to Turso/libSQL.
 
 ## Architecture
 
-**Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite, Tailwind CSS v4 (PostCSS plugin), Tiptap rich text editor, Lucide icons. Docker-ready with standalone output.
+**Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite/libSQL, Tailwind CSS v4 (PostCSS plugin), Tiptap rich text editor, Lucide icons. Docker-ready with standalone output; Vercel-ready with Turso.
 
 **Path alias:** `@/*` maps to `./src/*`.
 
@@ -58,7 +64,7 @@ No test runner is configured.
 ### Server-side
 
 - `prisma/schema.prisma` — Single `Note` model (SQLite). Fields: id, title, content, textContent, mode, isPinned, createdAt, updatedAt.
-- `src/lib/db.ts` — Singleton PrismaClient with WAL mode enabled. Imports `server-only`.
+- `src/lib/db.ts` - Singleton PrismaClient. Uses file SQLite for `DATABASE_URL=file:...` with WAL mode enabled; uses Turso/libSQL adapter for `DATABASE_URL=libsql://...` or `https://...`. Imports `server-only`.
 - `src/lib/auth.ts` — JWT sign/verify using `jsonwebtoken`. Imports `server-only`.
 - `src/lib/serialize.ts` — Converts Prisma `Note` (with Date fields) to the client `Note` type (with ISO string dates). Imports `server-only`.
 - `src/middleware.ts` — Protects all routes except `/login` and `/api/auth`. Runs in Edge Runtime so does lightweight JWT structure+expiry check only (full crypto verification happens in API routes).
@@ -126,3 +132,18 @@ docker compose up -d --build   # rebuild after code changes
 - Database is persisted to `./data/notes.db` via volume mount.
 - `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
 - Container auto-restarts on crash (`restart: unless-stopped`).
+
+### Vercel + Turso
+
+```bash
+turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
+turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
+```
+
+- Requires a Turso database and auth token.
+- Set `DATABASE_URL`, `TURSO_AUTH_TOKEN`, `APP_PASSWORD`, and `JWT_SECRET` in Vercel.
+- Apply migration SQL files to Turso manually with Turso CLI or the Turso dashboard SQL console.
+- Prisma Migrate CLI targets local/Docker SQLite here; do not use `DATABASE_URL=libsql://... prisma migrate deploy`.
+- Apply future `prisma/migrations/*/migration.sql` files in timestamp order before deploying code that depends on them.
+- Migrations are manual; do not add automatic Vercel build-time migrations unless explicitly requested.
+- Vercel cannot persist notes to a local SQLite file.

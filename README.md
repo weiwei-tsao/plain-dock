@@ -15,7 +15,7 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
 - **Collapsible sidebar** — collapse/expand on tablet and desktop; hidden on phone via back-button navigation
 - **Password-protected** — single shared password with JWT session cookies (httpOnly, 30-day expiry)
 - **Edge middleware** — lightweight JWT expiry check in Edge Runtime; full HMAC-SHA256 verification in API routes
-- **SQLite storage** — persistent data via Prisma with WAL mode; no external database required
+- **SQLite-compatible storage** - local/Docker use file SQLite; Vercel can use Turso/libSQL
 - **Docker-ready** — multi-stage Dockerfile with standalone Next.js output; migrations run automatically on container start
 
 ## Getting Started
@@ -33,6 +33,8 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
    APP_PASSWORD="your-password"
    JWT_SECRET="your-secret"
    ```
+   This local path uses file-backed SQLite. `TURSO_AUTH_TOKEN` is not needed unless `DATABASE_URL` points to Turso/libSQL.
+
    > Prisma CLI reads `.env` by default. If you use `.env.local`, add `--env-file .env.local` to Prisma commands. Both files are gitignored.
 
 3. Run the initial database migration:
@@ -53,7 +55,7 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
    APP_PASSWORD="your-password"
    JWT_SECRET="your-secret"
    ```
-   > `DATABASE_URL` is not needed — it is hardcoded in `docker-compose.yml`.
+   > `DATABASE_URL` is not needed for Docker - it is hardcoded in `docker-compose.yml` as `file:/app/data/notes.db`.
 
 2. Build and start:
    ```bash
@@ -71,6 +73,31 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
 | `docker compose logs -f` | Stream container logs |
 
 Data is persisted to `./data/notes.db` on the host via a volume mount — safe across restarts and rebuilds. Migrations run automatically on every container start.
+
+## Vercel Deployment with Turso
+
+Vercel serverless functions cannot persist writes to a local SQLite file. Use Turso/libSQL for Vercel while keeping the Prisma schema on SQLite.
+
+1. Create a Turso database, copy its `libsql://` URL, and create an auth token.
+
+2. Set Vercel environment variables:
+   ```env
+   DATABASE_URL="libsql://your-db.turso.io"
+   TURSO_AUTH_TOKEN="your-token"
+   APP_PASSWORD="your-password"
+   JWT_SECRET="your-secret"
+   ```
+
+3. Apply the Prisma migration SQL files to Turso manually with Turso CLI or the Turso dashboard SQL console. For a fresh database, apply the migration files in timestamp order:
+   ```bash
+   turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
+   turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
+   ```
+   Apply any future `prisma/migrations/*/migration.sql` files the same way before deploying code that depends on them.
+
+4. Deploy to Vercel.
+
+For existing local SQLite data, back up the database first, import it with Turso CLI tooling, verify the remote `Note` rows, then apply any schema migration SQL files that are not already represented in the imported database. Do not rely on Vercel's filesystem for note persistence.
 
 ## Scripts
 
@@ -105,7 +132,7 @@ Client Components (src/components/)
         └── RichToolbar       Tiptap formatting toolbar
 
 Server Libraries (src/lib/)
-  ├── db.ts                   Prisma singleton (server-only)
+  ├── db.ts                   Prisma singleton; file SQLite or Turso/libSQL by DATABASE_URL
   ├── auth.ts                 JWT sign/verify (server-only)
   ├── serialize.ts            Prisma → client type conversion (server-only)
   └── sanitizer/              3-layer HTML sanitization pipeline (client-side)
@@ -118,7 +145,7 @@ Middleware (src/middleware.ts)
 
 - **Next.js 16** — App Router, Turbopack, standalone output
 - **React 19** + **TypeScript** (strict)
-- **Prisma** + **SQLite** (WAL mode)
+- **Prisma** + **SQLite/libSQL** (file SQLite locally/in Docker, Turso on Vercel)
 - **Tailwind CSS v4** (PostCSS plugin, no config file)
 - **Tiptap** — rich text editor with StarterKit + Underline extension
 - **Lucide React** — icons

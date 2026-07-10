@@ -16,6 +16,7 @@
     "remotedev": "next dev --turbopack -p 3000 --hostname 0.0.0.0"
   },
   "dependencies": {
+    "@prisma/adapter-libsql": "6.19.2",
     "@prisma/client": "^6.19.2",
     "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-underline": "^2.27.2",
