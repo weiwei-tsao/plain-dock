@@ -12,10 +12,13 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
+    "db:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate",
     "remotedev": "next dev --turbopack -p 3000 --hostname 0.0.0.0"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "@prisma/adapter-libsql": "^7.8.0",
     "@prisma/client": "^6.19.2",
     "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-underline": "^2.27.2",
