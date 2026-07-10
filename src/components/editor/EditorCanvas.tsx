@@ -636,27 +636,50 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <Copy className="h-4 w-4" />
             </button>
 
-            <button
-              onClick={handleExportTxt}
-              className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-zinc-800 hover:text-white"
-              title="Export as .txt"
-            >
-              <Download className="h-4 w-4" />
-              <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                TXT
-              </span>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                title="Export"
+              >
+                <Download className="h-4 w-4" />
+              </button>
 
-            <button
-              onClick={handleExportMd}
-              className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-zinc-800 hover:text-white"
-              title="Export as .md"
-            >
-              <Download className="h-4 w-4" />
-              <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                MD
-              </span>
-            </button>
+              {showExportMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowExportMenu(false)}
+                  />
+                  <div className="absolute top-full right-0 z-50 mt-1 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
+                    <button
+                      onClick={() => {
+                        handleExportTxt();
+                        setShowExportMenu(false);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <span>Text</span>
+                      <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                        TXT
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExportMd();
+                        setShowExportMenu(false);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <span>Markdown</span>
+                      <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                        MD
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
