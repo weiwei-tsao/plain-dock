@@ -78,7 +78,7 @@ Data is persisted to `./data/notes.db` on the host via a volume mount — safe a
 
 Vercel serverless functions cannot persist writes to a local SQLite file. Use Turso/libSQL for Vercel while keeping the Prisma schema on SQLite.
 
-1. Create a Turso database and auth token.
+1. Create a Turso database, copy its `libsql://` URL, and create an auth token.
 
 2. Set Vercel environment variables:
    ```env
@@ -92,10 +92,11 @@ Vercel serverless functions cannot persist writes to a local SQLite file. Use Tu
    ```bash
    DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:deploy
    ```
+   Run this command again whenever new Prisma migrations are added.
 
 4. Deploy to Vercel.
 
-For existing local SQLite data, back up the database first, import it with Turso CLI tooling, verify the remote `Note` rows, then run or reconcile Prisma migrations against Turso. Do not rely on Vercel's filesystem for note persistence.
+For existing local SQLite data, back up the database first, import it with Turso CLI tooling, verify the remote `Note` rows, then run `npm run db:deploy` against Turso if the migration history is not already present. Do not rely on Vercel's filesystem for note persistence.
 
 ## Scripts
 
