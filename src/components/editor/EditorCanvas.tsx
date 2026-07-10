@@ -23,6 +23,7 @@ import {
   Pin,
   Trash2,
   Copy,
+  Download,
   FileCode,
   Type,
   AlertCircle,
@@ -77,6 +78,21 @@ function nodeToText(node: TiptapNode): string {
   if (!node.content?.length) return '';
   const inner = node.content.map(nodeToText).join('');
   return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
+}
+
+function sanitizeFilename(title: string): string {
+  const cleaned = title.trim().replace(/[\\/:*?"<>|]/g, '-');
+  return cleaned || 'untitled';
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 interface EditorCanvasProps {
@@ -333,6 +349,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     }
   };
 
+  const handleExportTxt = () => {
+    const text =
+      note.mode === NoteMode.RICH
+        ? nodeToText((editor?.getJSON() ?? {}) as TiptapNode)
+        : plainContentRef.current;
+    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, text);
+  };
+
   const statsText =
     note.mode === NoteMode.RICH ? (editor?.getText({ blockSeparator: '' }) ?? '') : plainContent;
   const trimmedStatsText = statsText.trim();
@@ -428,6 +452,16 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                         Copy HTML
                       </button>
                     )}
+                    <button
+                      onClick={() => {
+                        handleExportTxt();
+                        setShowOverflowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export .txt
+                    </button>
                     <div className="my-1 border-t border-zinc-800" />
                     <button
                       onClick={() => {
@@ -505,6 +539,17 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                 </span>
               </button>
             )}
+
+            <button
+              onClick={handleExportTxt}
+              className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-zinc-800 hover:text-white"
+              title="Export as .txt"
+            >
+              <Download className="h-4 w-4" />
+              <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                TXT
+              </span>
+            </button>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
