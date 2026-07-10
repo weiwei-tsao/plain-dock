@@ -174,9 +174,10 @@ function countWords(text: string): number {
   return cjkCount + nonCjkCount;
 }
 
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
 function countCharacters(text: string): number {
-  return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text))
-    .length;
+  return Array.from(GRAPHEME_SEGMENTER.segment(text)).length;
 }
 
 interface EditorCanvasProps {
@@ -449,10 +450,17 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     downloadTextFile(`${sanitizeFilename(localTitle)}.md`, text);
   };
 
-  const statsText =
-    note.mode === NoteMode.RICH ? (editor?.getText({ blockSeparator: '' }) ?? '') : plainContent;
-  const wordCount = countWords(statsText);
-  const charCount = countCharacters(statsText);
+  // Word counting needs block boundaries preserved (otherwise adjacent paragraphs merge
+  // into one "word"); character counting needs them absent (773dc49 — no phantom \n\n).
+  // One separator can't serve both, so RICH mode reads two differently-separated strings.
+  const wordCount =
+    note.mode === NoteMode.RICH
+      ? countWords(editor?.getText({ blockSeparator: '\n' }) ?? '')
+      : countWords(plainContent);
+  const charCount =
+    note.mode === NoteMode.RICH
+      ? countCharacters(editor?.getText({ blockSeparator: '' }) ?? '')
+      : countCharacters(plainContent);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
