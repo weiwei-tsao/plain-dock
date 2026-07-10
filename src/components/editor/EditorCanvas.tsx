@@ -60,11 +60,14 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
   });
 }
 
+type TiptapMark = { type: string; attrs?: Record<string, unknown> };
+
 type TiptapNode = {
   type?: string;
   text?: string;
   content?: TiptapNode[];
   attrs?: Record<string, unknown>;
+  marks?: TiptapMark[];
 };
 const BLOCK_NODE_TYPES = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock']);
 
@@ -78,6 +81,68 @@ function nodeToText(node: TiptapNode): string {
   if (!node.content?.length) return '';
   const inner = node.content.map(nodeToText).join('');
   return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
+}
+
+function applyMarks(text: string, marks: TiptapMark[] = []): string {
+  const wrappers: Array<[string, (s: string) => string]> = [
+    ['code', (s) => `\`${s}\``],
+    ['strike', (s) => `~~${s}~~`],
+    ['italic', (s) => `_${s}_`],
+    ['bold', (s) => `**${s}**`],
+    ['underline', (s) => `<u>${s}</u>`],
+  ];
+  let result = text;
+  for (const [type, wrap] of wrappers) {
+    if (marks.some((m) => m.type === type)) result = wrap(result);
+  }
+  const link = marks.find((m) => m.type === 'link');
+  const href = link?.attrs?.href;
+  if (typeof href === 'string') {
+    result = `[${result}](${href})`;
+  }
+  return result;
+}
+
+function nodeToMarkdown(node: TiptapNode): string {
+  if (node.type === 'image') {
+    const alt = node.attrs?.alt as string | undefined;
+    return `[image: ${alt || 'embedded-image.webp'}]`;
+  }
+  if (node.type === 'text') return applyMarks(node.text ?? '', node.marks);
+  if (node.type === 'hardBreak') return '\n';
+
+  const inner = (node.content ?? []).map(nodeToMarkdown);
+
+  switch (node.type) {
+    case 'heading': {
+      const level = (node.attrs?.level as number | undefined) ?? 1;
+      return `${'#'.repeat(level)} ${inner.join('')}\n\n`;
+    }
+    case 'paragraph':
+      return `${inner.join('')}\n\n`;
+    case 'codeBlock':
+      return `\`\`\`\n${inner.join('')}\n\`\`\`\n\n`;
+    case 'blockquote':
+      return (
+        inner
+          .join('')
+          .trimEnd()
+          .split('\n')
+          .map((line) => `> ${line}`)
+          .join('\n') + '\n\n'
+      );
+    case 'bulletList':
+      return (node.content ?? []).map((li) => `- ${nodeToMarkdown(li).trim()}`).join('\n') + '\n\n';
+    case 'orderedList':
+      return (
+        (node.content ?? []).map((li, i) => `${i + 1}. ${nodeToMarkdown(li).trim()}`).join('\n') +
+        '\n\n'
+      );
+    case 'listItem':
+      return inner.join('');
+    default:
+      return inner.join('');
+  }
 }
 
 function sanitizeFilename(title: string): string {
@@ -357,6 +422,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, text);
   };
 
+  const handleExportMd = () => {
+    const text =
+      note.mode === NoteMode.RICH
+        ? nodeToMarkdown((editor?.getJSON() ?? {}) as TiptapNode).trim()
+        : plainContentRef.current;
+    downloadTextFile(`${sanitizeFilename(localTitle)}.md`, text);
+  };
+
   const statsText =
     note.mode === NoteMode.RICH ? (editor?.getText({ blockSeparator: '' }) ?? '') : plainContent;
   const trimmedStatsText = statsText.trim();
@@ -462,6 +535,16 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                       <Download className="h-4 w-4" />
                       Export .txt
                     </button>
+                    <button
+                      onClick={() => {
+                        handleExportMd();
+                        setShowOverflowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export .md
+                    </button>
                     <div className="my-1 border-t border-zinc-800" />
                     <button
                       onClick={() => {
@@ -548,6 +631,17 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <Download className="h-4 w-4" />
               <span className="rounded-sm border border-current px-1 text-[9px] font-black">
                 TXT
+              </span>
+            </button>
+
+            <button
+              onClick={handleExportMd}
+              className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-zinc-800 hover:text-white"
+              title="Export as .md"
+            >
+              <Download className="h-4 w-4" />
+              <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                MD
               </span>
             </button>
 
