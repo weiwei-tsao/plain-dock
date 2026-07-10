@@ -525,6 +525,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                     <button
                       onClick={() => {
                         copyToClipboard();
+                        setShowExportMenu(false);
                         setShowOverflowMenu(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
