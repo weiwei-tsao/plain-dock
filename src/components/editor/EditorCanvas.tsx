@@ -95,6 +95,8 @@ function applyMarks(text: string, marks: TiptapMark[] = []): string {
   for (const [type, wrap] of wrappers) {
     if (marks.some((m) => m.type === type)) result = wrap(result);
   }
+  // No Link extension is registered on this editor (see useEditor below), so no text
+  // node can carry a 'link' mark today — this branch is inert until one is added.
   const link = marks.find((m) => m.type === 'link');
   const href = link?.attrs?.href;
   if (typeof href === 'string') {
