@@ -30,7 +30,7 @@ function createPrismaClient() {
 
 export const prisma =
   process.env.NODE_ENV !== 'production' && globalForPrisma.prismaDatabaseUrl === databaseUrl
-    ? globalForPrisma.prisma ?? createPrismaClient()
+    ? (globalForPrisma.prisma ?? createPrismaClient())
     : createPrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
