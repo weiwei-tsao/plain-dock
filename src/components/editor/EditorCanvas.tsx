@@ -23,6 +23,7 @@ import {
   Pin,
   Trash2,
   Copy,
+  Download,
   FileCode,
   Type,
   AlertCircle,
@@ -59,11 +60,14 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
   });
 }
 
+type TiptapMark = { type: string; attrs?: Record<string, unknown> };
+
 type TiptapNode = {
   type?: string;
   text?: string;
   content?: TiptapNode[];
   attrs?: Record<string, unknown>;
+  marks?: TiptapMark[];
 };
 const BLOCK_NODE_TYPES = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock']);
 
@@ -77,6 +81,103 @@ function nodeToText(node: TiptapNode): string {
   if (!node.content?.length) return '';
   const inner = node.content.map(nodeToText).join('');
   return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
+}
+
+function applyMarks(text: string, marks: TiptapMark[] = []): string {
+  const wrappers: Array<[string, (s: string) => string]> = [
+    ['code', (s) => `\`${s}\``],
+    ['strike', (s) => `~~${s}~~`],
+    ['italic', (s) => `_${s}_`],
+    ['bold', (s) => `**${s}**`],
+    ['underline', (s) => `<u>${s}</u>`],
+  ];
+  let result = text;
+  for (const [type, wrap] of wrappers) {
+    if (marks.some((m) => m.type === type)) result = wrap(result);
+  }
+  // No Link extension is registered on this editor (see useEditor below), so no text
+  // node can carry a 'link' mark today — this branch is inert until one is added.
+  const link = marks.find((m) => m.type === 'link');
+  const href = link?.attrs?.href;
+  if (typeof href === 'string') {
+    result = `[${result}](${href})`;
+  }
+  return result;
+}
+
+function nodeToMarkdown(node: TiptapNode): string {
+  if (node.type === 'image') {
+    const alt = node.attrs?.alt as string | undefined;
+    return `[image: ${alt || 'embedded-image.webp'}]`;
+  }
+  if (node.type === 'text') return applyMarks(node.text ?? '', node.marks);
+  if (node.type === 'hardBreak') return '\n';
+
+  const inner = (node.content ?? []).map(nodeToMarkdown);
+
+  switch (node.type) {
+    case 'heading': {
+      const level = (node.attrs?.level as number | undefined) ?? 1;
+      return `${'#'.repeat(level)} ${inner.join('')}\n\n`;
+    }
+    case 'paragraph':
+      return `${inner.join('')}\n\n`;
+    case 'codeBlock':
+      return `\`\`\`\n${inner.join('')}\n\`\`\`\n\n`;
+    case 'blockquote':
+      return (
+        inner
+          .join('')
+          .trimEnd()
+          .split('\n')
+          .map((line) => `> ${line}`)
+          .join('\n') + '\n\n'
+      );
+    case 'bulletList':
+      return (node.content ?? []).map((li) => `- ${nodeToMarkdown(li).trim()}`).join('\n') + '\n\n';
+    case 'orderedList':
+      return (
+        (node.content ?? []).map((li, i) => `${i + 1}. ${nodeToMarkdown(li).trim()}`).join('\n') +
+        '\n\n'
+      );
+    case 'listItem':
+      return inner.join('');
+    default:
+      return inner.join('');
+  }
+}
+
+function sanitizeFilename(title: string): string {
+  const cleaned = title.trim().replace(/[\\/:*?"<>|]/g, '-');
+  return cleaned || 'untitled';
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// CJK scripts have no spaces between words, so a plain whitespace split undercounts
+// them (e.g. "统计 中文" would count as 2 "words" instead of 4 characters). Count each
+// CJK character individually, then count remaining whitespace-delimited runs as words.
+const CJK_CHAR_REGEX = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7a3]/g;
+
+function countWords(text: string): number {
+  const cjkCount = (text.match(CJK_CHAR_REGEX) ?? []).length;
+  const nonCjkText = text.replace(CJK_CHAR_REGEX, ' ').trim();
+  const nonCjkCount = nonCjkText ? nonCjkText.split(/\s+/).length : 0;
+  return cjkCount + nonCjkCount;
+}
+
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function countCharacters(text: string): number {
+  return Array.from(GRAPHEME_SEGMENTER.segment(text)).length;
 }
 
 interface EditorCanvasProps {
@@ -103,6 +204,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [showModeConfirm, setShowModeConfirm] = useState(false);
   const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
@@ -303,35 +405,44 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     });
   };
 
-  const copyToClipboard = async (isHTML: boolean = false) => {
+  const copyToClipboard = async () => {
     const plainText =
       note.mode === NoteMode.PLAIN ? plainContentRef.current : (editor?.getText() ?? '');
     try {
-      if (isHTML && note.mode === NoteMode.RICH) {
-        if (!editor) return;
-        const html = editor.getHTML();
-        const blobHTML = new Blob([html], { type: 'text/html' });
-        const blobText = new Blob([plainText], { type: 'text/plain' });
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'text/html': blobHTML, 'text/plain': blobText }),
-        ]);
-        setToast({ message: 'Rich text copied!', variant: 'success' });
-      } else {
-        await navigator.clipboard.writeText(plainText);
-        setToast({ message: 'Plain text copied!', variant: 'success' });
-      }
+      await navigator.clipboard.writeText(plainText);
+      setToast({ message: 'Copied!', variant: 'success' });
     } catch {
-      try {
-        await navigator.clipboard.writeText(plainText);
-        setToast({
-          message: 'Copying rich text failed, plain text copied instead.',
-          variant: 'error',
-        });
-      } catch {
-        setToast({ message: 'Clipboard access denied.', variant: 'error' });
-      }
+      setToast({ message: 'Clipboard access denied.', variant: 'error' });
     }
   };
+
+  const handleExportTxt = () => {
+    const text =
+      note.mode === NoteMode.RICH
+        ? nodeToText((editor?.getJSON() ?? {}) as TiptapNode)
+        : plainContentRef.current;
+    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, text);
+  };
+
+  const handleExportMd = () => {
+    const text =
+      note.mode === NoteMode.RICH
+        ? nodeToMarkdown((editor?.getJSON() ?? {}) as TiptapNode).trim()
+        : plainContentRef.current;
+    downloadTextFile(`${sanitizeFilename(localTitle)}.md`, text);
+  };
+
+  // Word counting needs block boundaries preserved (otherwise adjacent paragraphs merge
+  // into one "word"); character counting needs them absent (773dc49 — no phantom \n\n).
+  // One separator can't serve both, so RICH mode reads two differently-separated strings.
+  const wordCount =
+    note.mode === NoteMode.RICH
+      ? countWords(editor?.getText({ blockSeparator: '\n' }) ?? '')
+      : countWords(plainContent);
+  const charCount =
+    note.mode === NoteMode.RICH
+      ? countCharacters(editor?.getText({ blockSeparator: '' }) ?? '')
+      : countCharacters(plainContent);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
@@ -390,7 +501,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             {/* Overflow menu */}
             <div className="relative">
               <button
-                onClick={() => setShowOverflowMenu((v) => !v)}
+                onClick={() => {
+                  setShowOverflowMenu((v) => {
+                    if (v) setShowExportMenu(false);
+                    return !v;
+                  });
+                }}
                 className="rounded-lg p-2.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
               >
                 <MoreHorizontal className="h-4 w-4" />
@@ -398,34 +514,67 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
               {showOverflowMenu && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowOverflowMenu(false)} />
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => {
+                      setShowOverflowMenu(false);
+                      setShowExportMenu(false);
+                    }}
+                  />
                   <div className="absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
                     <button
                       onClick={() => {
-                        copyToClipboard(false);
+                        copyToClipboard();
+                        setShowExportMenu(false);
                         setShowOverflowMenu(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
                     >
                       <Copy className="h-4 w-4" />
-                      Copy Plain
+                      Copy
                     </button>
-                    {note.mode === NoteMode.RICH && (
-                      <button
-                        onClick={() => {
-                          copyToClipboard(true);
-                          setShowOverflowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <Copy className="h-4 w-4" />
-                        Copy HTML
-                      </button>
+                    <button
+                      onClick={() => setShowExportMenu((v) => !v)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export
+                    </button>
+                    {showExportMenu && (
+                      <div className="border-y border-zinc-800 bg-black/20 py-1">
+                        <button
+                          onClick={() => {
+                            handleExportTxt();
+                            setShowExportMenu(false);
+                            setShowOverflowMenu(false);
+                          }}
+                          className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                        >
+                          <span>Text</span>
+                          <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                            TXT
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExportMd();
+                            setShowExportMenu(false);
+                            setShowOverflowMenu(false);
+                          }}
+                          className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                        >
+                          <span>Markdown</span>
+                          <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                            MD
+                          </span>
+                        </button>
+                      </div>
                     )}
                     <div className="my-1 border-t border-zinc-800" />
                     <button
                       onClick={() => {
                         setShowDeleteConfirm(true);
+                        setShowExportMenu(false);
                         setShowOverflowMenu(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-400/10"
@@ -480,25 +629,54 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <div className="mx-1 h-6 w-px bg-zinc-800" />
 
             <button
-              onClick={() => copyToClipboard(false)}
+              onClick={copyToClipboard}
               className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-              title="Copy Plain"
+              title="Copy"
             >
               <Copy className="h-4 w-4" />
             </button>
 
-            {note.mode === NoteMode.RICH && (
+            <div className="relative">
               <button
-                onClick={() => copyToClipboard(true)}
-                className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-indigo-400/10 hover:text-indigo-400"
-                title="Copy Rich (HTML)"
+                onClick={() => setShowExportMenu((v) => !v)}
+                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                title="Export"
               >
-                <Copy className="h-4 w-4" />
-                <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                  HTML
-                </span>
+                <Download className="h-4 w-4" />
               </button>
-            )}
+
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <div className="absolute top-full right-0 z-50 mt-1 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
+                    <button
+                      onClick={() => {
+                        handleExportTxt();
+                        setShowExportMenu(false);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <span>Text</span>
+                      <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                        TXT
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExportMd();
+                        setShowExportMenu(false);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <span>Markdown</span>
+                      <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                        MD
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -560,15 +738,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       <footer className="hidden items-center justify-between border-t border-zinc-900 bg-black px-6 py-2 text-[10px] font-bold tracking-widest text-zinc-600 uppercase md:flex">
         <div className="flex items-center gap-4">
           <span>Synced: {new Date(note.updatedAt).toLocaleTimeString()}</span>
-          <span className="text-zinc-800">&bull;</span>
-          <span>{note.id}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>
             {note.mode}
           </span>
           <span className="text-zinc-800">&bull;</span>
-          <span>{getNoteTextContent(note.content).length} chars</span>
+          <span>{wordCount} Words</span>
+          <span className="text-zinc-800">&bull;</span>
+          <span>{charCount} Characters</span>
         </div>
       </footer>
 
