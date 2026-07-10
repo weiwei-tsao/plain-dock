@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is PlainDock
 
-PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (semantic HTML via Tiptap) mode. Pasted HTML content goes through a 3-layer sanitization pipeline (security stripping → tag normalization → structure downgrade). Data is persisted to SQLite via Prisma. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
+PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (semantic HTML via Tiptap) mode. Pasted HTML content goes through a 3-layer sanitization pipeline (security stripping → tag normalization → structure downgrade). Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
 
 ## Development Commands
 
@@ -141,5 +141,6 @@ DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run d
 
 - Requires a Turso database and auth token.
 - Set `DATABASE_URL`, `TURSO_AUTH_TOKEN`, `APP_PASSWORD`, and `JWT_SECRET` in Vercel.
+- Run this command again whenever new Prisma migrations are added.
 - Migrations are manual; do not add automatic Vercel build-time migrations unless explicitly requested.
 - Vercel cannot persist notes to a local SQLite file.
