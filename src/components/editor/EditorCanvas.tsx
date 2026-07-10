@@ -162,6 +162,23 @@ function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
+// CJK scripts have no spaces between words, so a plain whitespace split undercounts
+// them (e.g. "统计 中文" would count as 2 "words" instead of 4 characters). Count each
+// CJK character individually, then count remaining whitespace-delimited runs as words.
+const CJK_CHAR_REGEX = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7a3]/g;
+
+function countWords(text: string): number {
+  const cjkCount = (text.match(CJK_CHAR_REGEX) ?? []).length;
+  const nonCjkText = text.replace(CJK_CHAR_REGEX, ' ').trim();
+  const nonCjkCount = nonCjkText ? nonCjkText.split(/\s+/).length : 0;
+  return cjkCount + nonCjkCount;
+}
+
+function countCharacters(text: string): number {
+  return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text))
+    .length;
+}
+
 interface EditorCanvasProps {
   note: Note;
   onUpdate: (note: Note) => void;
@@ -434,9 +451,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
   const statsText =
     note.mode === NoteMode.RICH ? (editor?.getText({ blockSeparator: '' }) ?? '') : plainContent;
-  const trimmedStatsText = statsText.trim();
-  const wordCount = trimmedStatsText ? trimmedStatsText.split(/\s+/).length : 0;
-  const charCount = statsText.length;
+  const wordCount = countWords(statsText);
+  const charCount = countCharacters(statsText);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
