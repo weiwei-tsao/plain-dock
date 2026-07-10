@@ -4,6 +4,7 @@ node_modules
 # Build output
 .next
 dist
+.worktrees/
 
 # Environment files
 *.local
