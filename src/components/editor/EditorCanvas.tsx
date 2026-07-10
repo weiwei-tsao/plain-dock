@@ -404,33 +404,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     });
   };
 
-  const copyToClipboard = async (isHTML: boolean = false) => {
+  const copyToClipboard = async () => {
     const plainText =
       note.mode === NoteMode.PLAIN ? plainContentRef.current : (editor?.getText() ?? '');
     try {
-      if (isHTML && note.mode === NoteMode.RICH) {
-        if (!editor) return;
-        const html = editor.getHTML();
-        const blobHTML = new Blob([html], { type: 'text/html' });
-        const blobText = new Blob([plainText], { type: 'text/plain' });
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'text/html': blobHTML, 'text/plain': blobText }),
-        ]);
-        setToast({ message: 'Rich text copied!', variant: 'success' });
-      } else {
-        await navigator.clipboard.writeText(plainText);
-        setToast({ message: 'Plain text copied!', variant: 'success' });
-      }
+      await navigator.clipboard.writeText(plainText);
+      setToast({ message: 'Copied!', variant: 'success' });
     } catch {
-      try {
-        await navigator.clipboard.writeText(plainText);
-        setToast({
-          message: 'Copying rich text failed, plain text copied instead.',
-          variant: 'error',
-        });
-      } catch {
-        setToast({ message: 'Clipboard access denied.', variant: 'error' });
-      }
+      setToast({ message: 'Clipboard access denied.', variant: 'error' });
     }
   };
 
@@ -531,26 +512,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   <div className="absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
                     <button
                       onClick={() => {
-                        copyToClipboard(false);
+                        copyToClipboard();
                         setShowOverflowMenu(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
                     >
                       <Copy className="h-4 w-4" />
-                      Copy Plain
+                      Copy
                     </button>
-                    {note.mode === NoteMode.RICH && (
-                      <button
-                        onClick={() => {
-                          copyToClipboard(true);
-                          setShowOverflowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <Copy className="h-4 w-4" />
-                        Copy HTML
-                      </button>
-                    )}
                     <button
                       onClick={() => {
                         handleExportTxt();
@@ -629,25 +598,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <div className="mx-1 h-6 w-px bg-zinc-800" />
 
             <button
-              onClick={() => copyToClipboard(false)}
+              onClick={copyToClipboard}
               className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-              title="Copy Plain"
+              title="Copy"
             >
               <Copy className="h-4 w-4" />
             </button>
-
-            {note.mode === NoteMode.RICH && (
-              <button
-                onClick={() => copyToClipboard(true)}
-                className="flex items-center gap-1.5 rounded-lg p-2 text-zinc-500 transition-all hover:bg-indigo-400/10 hover:text-indigo-400"
-                title="Copy Rich (HTML)"
-              >
-                <Copy className="h-4 w-4" />
-                <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                  HTML
-                </span>
-              </button>
-            )}
 
             <button
               onClick={handleExportTxt}
