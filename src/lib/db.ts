@@ -5,7 +5,10 @@ import { PrismaLibSQL } from '@prisma/adapter-libsql';
 const databaseUrl = process.env.DATABASE_URL ?? '';
 const isLibSqlUrl = databaseUrl.startsWith('libsql://') || databaseUrl.startsWith('https://');
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+  prismaDatabaseUrl?: string;
+};
 
 function createPrismaClient() {
   if (!isLibSqlUrl) {
@@ -25,9 +28,15 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma || createPrismaClient();
+export const prisma =
+  process.env.NODE_ENV !== 'production' && globalForPrisma.prismaDatabaseUrl === databaseUrl
+    ? globalForPrisma.prisma ?? createPrismaClient()
+    : createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaDatabaseUrl = databaseUrl;
+}
 
 // Enable WAL mode for local file-backed SQLite. Turso/libSQL is remote and does not use this pragma.
 if (!isLibSqlUrl) {
