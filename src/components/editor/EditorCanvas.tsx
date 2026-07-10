@@ -647,10 +647,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
               {showExportMenu && (
                 <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowExportMenu(false)}
-                  />
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
                   <div className="absolute top-full right-0 z-50 mt-1 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
                     <button
                       onClick={() => {
