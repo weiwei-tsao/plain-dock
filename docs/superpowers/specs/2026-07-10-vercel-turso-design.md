@@ -50,10 +50,9 @@ For local and Docker SQLite:
 
 For Turso/libSQL:
 
-- Add dependencies:
-  - `@prisma/adapter-libsql`
-  - `@libsql/client`
-- Import `PrismaLibSql` from `@prisma/adapter-libsql`.
+- Add exact `@prisma/adapter-libsql` dependency aligned with the installed Prisma version.
+- Use the adapter's transitive `@libsql/client` dependency rather than declaring it directly.
+- Import `PrismaLibSQL` from `@prisma/adapter-libsql`.
 - Create the adapter with:
   - `url: process.env.DATABASE_URL`
   - `authToken: process.env.TURSO_AUTH_TOKEN`
@@ -109,16 +108,11 @@ Vercel does not use Docker and does not rely on a local SQLite file. The deploym
 
 Turso migrations are manual.
 
-Add one npm script:
-
-```json
-"db:deploy": "prisma migrate deploy"
-```
-
-For a fresh Turso database, run from a local shell with Turso environment variables:
+Prisma Migrate CLI remains for local/Docker SQLite. With this SQLite datasource, `prisma migrate deploy` does not target a `libsql://` Turso URL. For a fresh Turso database, apply the migration SQL files in timestamp order with Turso CLI or the Turso dashboard SQL console:
 
 ```bash
-DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:deploy
+turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
+turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
 ```
 
 The application code will not run `prisma migrate deploy` on Vercel build or serverless startup. This keeps Vercel deploys predictable and avoids writing to the database as a side effect of every deploy.
@@ -132,13 +126,13 @@ For an existing local SQLite database:
 1. Back up the current SQLite database file.
 2. Export or import the local SQLite data with Turso CLI tooling.
 3. Verify the remote Turso database has the expected `Note` rows.
-4. Run `npm run db:deploy` against Turso if the migration history needs to be applied or reconciled.
+4. Apply any migration SQL files that are not already represented in the imported database.
 5. Set Vercel environment variables and deploy.
 
 Documentation should separate two paths:
 
 - Fresh Turso database: run migrations, then deploy.
-- Existing local data: back up, import data, verify, then run or reconcile migrations.
+- Existing local data: back up, import data, verify, then apply or reconcile migration SQL files.
 
 The exact Turso CLI import command can vary by Turso CLI version, so the docs should point the user to Turso's current import command and avoid embedding app-specific import code.
 
@@ -157,7 +151,7 @@ The docs should explain:
 - Vercel requires Turso/libSQL.
 - `DATABASE_URL=file:...` and `DATABASE_URL=libsql://...` choose different runtime connection paths automatically.
 - `TURSO_AUTH_TOKEN` is required only for Turso.
-- Turso migrations are manual with `npm run db:deploy`.
+- Turso migrations are manual with Turso CLI or the Turso dashboard SQL console.
 
 ## Error Handling
 
@@ -198,8 +192,9 @@ Then verify the app starts, migrations run, and `./data/notes.db` persists data 
 Turso verification:
 
 ```bash
-DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:deploy
-npm run build
+turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
+turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
+DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run build
 ```
 
 For Vercel, configure `DATABASE_URL`, `TURSO_AUTH_TOKEN`, `APP_PASSWORD`, and `JWT_SECRET`, then deploy and verify note CRUD persists after redeploy.

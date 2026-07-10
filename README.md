@@ -88,15 +88,16 @@ Vercel serverless functions cannot persist writes to a local SQLite file. Use Tu
    JWT_SECRET="your-secret"
    ```
 
-3. Apply Prisma migrations manually from your local machine:
+3. Apply the Prisma migration SQL files to Turso manually with Turso CLI or the Turso dashboard SQL console. For a fresh database, apply the migration files in timestamp order:
    ```bash
-   DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:deploy
+   turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
+   turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
    ```
-   Run this command again whenever new Prisma migrations are added.
+   Apply any future `prisma/migrations/*/migration.sql` files the same way before deploying code that depends on them.
 
 4. Deploy to Vercel.
 
-For existing local SQLite data, back up the database first, import it with Turso CLI tooling, verify the remote `Note` rows, then run `npm run db:deploy` against Turso if the migration history is not already present. Do not rely on Vercel's filesystem for note persistence.
+For existing local SQLite data, back up the database first, import it with Turso CLI tooling, verify the remote `Note` rows, then apply any schema migration SQL files that are not already represented in the imported database. Do not rely on Vercel's filesystem for note persistence.
 
 ## Scripts
 
@@ -110,7 +111,6 @@ For existing local SQLite data, back up the database first, import it with Turso
 | `npm run format` | Prettier format |
 | `npm run format:check` | Prettier check (no write) |
 | `npm run typecheck` | TypeScript type check |
-| `npm run db:deploy` | Apply Prisma migrations to the configured database |
 | `npx prisma migrate dev` | Create and apply database migrations |
 | `npx prisma studio` | Browse the database via GUI |
 

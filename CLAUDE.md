@@ -136,11 +136,14 @@ docker compose up -d --build   # rebuild after code changes
 ### Vercel + Turso
 
 ```bash
-DATABASE_URL="libsql://your-db.turso.io" TURSO_AUTH_TOKEN="your-token" npm run db:deploy
+turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
+turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
 ```
 
 - Requires a Turso database and auth token.
 - Set `DATABASE_URL`, `TURSO_AUTH_TOKEN`, `APP_PASSWORD`, and `JWT_SECRET` in Vercel.
-- Run this command again whenever new Prisma migrations are added.
+- Apply migration SQL files to Turso manually with Turso CLI or the Turso dashboard SQL console.
+- Prisma Migrate CLI targets local/Docker SQLite here; do not use `DATABASE_URL=libsql://... prisma migrate deploy`.
+- Apply future `prisma/migrations/*/migration.sql` files in timestamp order before deploying code that depends on them.
 - Migrations are manual; do not add automatic Vercel build-time migrations unless explicitly requested.
 - Vercel cannot persist notes to a local SQLite file.
