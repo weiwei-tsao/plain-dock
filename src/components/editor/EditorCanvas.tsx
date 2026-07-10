@@ -501,7 +501,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             {/* Overflow menu */}
             <div className="relative">
               <button
-                onClick={() => setShowOverflowMenu((v) => !v)}
+                onClick={() => {
+                  setShowOverflowMenu((v) => {
+                    if (v) setShowExportMenu(false);
+                    return !v;
+                  });
+                }}
                 className="rounded-lg p-2.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
               >
                 <MoreHorizontal className="h-4 w-4" />
@@ -509,7 +514,13 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
               {showOverflowMenu && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowOverflowMenu(false)} />
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => {
+                      setShowOverflowMenu(false);
+                      setShowExportMenu(false);
+                    }}
+                  />
                   <div className="absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
                     <button
                       onClick={() => {
@@ -522,29 +533,47 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                       Copy
                     </button>
                     <button
-                      onClick={() => {
-                        handleExportTxt();
-                        setShowOverflowMenu(false);
-                      }}
+                      onClick={() => setShowExportMenu((v) => !v)}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
                     >
                       <Download className="h-4 w-4" />
-                      Export .txt
+                      Export
                     </button>
-                    <button
-                      onClick={() => {
-                        handleExportMd();
-                        setShowOverflowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export .md
-                    </button>
+                    {showExportMenu && (
+                      <div className="border-y border-zinc-800 bg-black/20 py-1">
+                        <button
+                          onClick={() => {
+                            handleExportTxt();
+                            setShowExportMenu(false);
+                            setShowOverflowMenu(false);
+                          }}
+                          className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                        >
+                          <span>Text</span>
+                          <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                            TXT
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            handleExportMd();
+                            setShowExportMenu(false);
+                            setShowOverflowMenu(false);
+                          }}
+                          className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                        >
+                          <span>Markdown</span>
+                          <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                            MD
+                          </span>
+                        </button>
+                      </div>
+                    )}
                     <div className="my-1 border-t border-zinc-800" />
                     <button
                       onClick={() => {
                         setShowDeleteConfirm(true);
+                        setShowExportMenu(false);
                         setShowOverflowMenu(false);
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-400/10"
