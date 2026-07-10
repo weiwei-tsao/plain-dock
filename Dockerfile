@@ -14,6 +14,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL="file:./build.db"
+ENV JWT_SECRET="build-time-placeholder"
 RUN npx prisma migrate deploy && npm run build && rm -f build.db
 
 # --- Production ---
