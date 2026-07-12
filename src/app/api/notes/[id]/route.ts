@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { serializeNote } from '@/lib/serialize';
+import { deriveTitleFromText } from '@/lib/note-title';
 
 // GET /api/notes/:id — Get full note detail (including content)
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -37,6 +38,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Note not found' }, { status: 404 });
   }
 
+  // Title policy: a note with content must not persist with an empty title —
+  // derive one from the text content so the stored title is always identifiable.
+  const finalTitle = typeof title === 'string' ? title : existing.title;
+  const finalText = typeof textContent === 'string' ? textContent : existing.textContent;
+  const derivedTitle =
+    finalTitle.trim() === '' && finalText.trim() !== ''
+      ? { title: deriveTitleFromText(finalText) }
+      : {};
+
   const note = await prisma.note.update({
     where: { id },
     data: {
@@ -45,6 +55,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ...(textContent !== undefined && { textContent }),
       ...(mode !== undefined && { mode }),
       ...(isPinned !== undefined && { isPinned }),
+      ...derivedTitle,
     },
   });
 
