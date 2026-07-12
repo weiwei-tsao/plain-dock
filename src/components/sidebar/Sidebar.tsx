@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { Note } from '@/types';
 import { Search, Plus, Pin, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import PlainDockIcon from '@/components/ui/PlainDockIcon';
+import { deriveTitleFromText } from '@/lib/note-title';
 
 interface SidebarProps {
   notes: Note[];
@@ -18,6 +19,15 @@ interface SidebarProps {
 }
 
 const PULL_THRESHOLD = 50;
+
+// Titles are persisted server-side on save (see PUT /api/notes/[id]); deriving
+// here is only a fallback for notes stored before that policy existed.
+function displayParts(note: Note): { title: string; preview: string } {
+  return {
+    title: note.title || deriveTitleFromText(note.textContent) || 'Untitled',
+    preview: note.textContent,
+  };
+}
 
 const Sidebar: React.FC<SidebarProps> = ({
   notes,
@@ -137,35 +147,38 @@ const Sidebar: React.FC<SidebarProps> = ({
             <div className="mt-10 text-center text-sm text-zinc-600">No notes found</div>
           ) : (
             <div className="space-y-1">
-              {filteredNotes.map((note) => (
-                <button
-                  key={note.id}
-                  onClick={() => onSelectNote(note.id)}
-                  className={`group relative w-full rounded-lg p-4 text-left transition-all md:p-3 ${
-                    activeNoteId === note.id
-                      ? 'bg-zinc-800 text-white'
-                      : 'text-zinc-400 hover:bg-zinc-900'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {note.isPinned && <Pin className="h-3 w-3 shrink-0 text-indigo-400" />}
-                        <h3 className="truncate text-sm font-medium">{note.title || 'Untitled'}</h3>
+              {filteredNotes.map((note) => {
+                const { title, preview } = displayParts(note);
+                return (
+                  <button
+                    key={note.id}
+                    onClick={() => onSelectNote(note.id)}
+                    className={`group relative w-full rounded-lg p-4 text-left transition-all md:p-3 ${
+                      activeNoteId === note.id
+                        ? 'bg-zinc-800 text-white'
+                        : 'text-zinc-400 hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {note.isPinned && <Pin className="h-3 w-3 shrink-0 text-indigo-400" />}
+                          <h3 className="truncate text-sm font-medium">{title}</h3>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-zinc-500">
+                          {preview || 'No content...'}
+                        </p>
                       </div>
-                      <p className="mt-1 truncate text-xs text-zinc-500">
-                        {note.textContent || 'No content...'}
-                      </p>
+                      <span className="mt-1 shrink-0 text-[10px] text-zinc-600">
+                        {new Date(note.updatedAt).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
                     </div>
-                    <span className="mt-1 shrink-0 text-[10px] text-zinc-600">
-                      {new Date(note.updatedAt).toLocaleDateString([], {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
