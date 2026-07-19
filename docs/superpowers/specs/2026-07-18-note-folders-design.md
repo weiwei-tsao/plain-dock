@@ -43,8 +43,8 @@ New routes, following existing conventions (serializers, error shape, `await par
 Changes to existing routes:
 
 - `GET /api/notes` — include `folderId` in the lightweight list response.
-- `POST /api/notes` — accept optional `folderId` so notes created inside a folder are filed there.
-- `PUT /api/notes/[id]` — accept `folderId` (including `null`) to move a note.
+- `POST /api/notes` — accept optional `folderId` so notes created inside a folder are filed there (same unknown-folder 400 validation as PUT).
+- `PUT /api/notes/[id]` — accept `folderId` with three-state semantics: **omitted** = leave unchanged, **`null`** = move to All Notes, **string** = move to that folder. The handler's existing `...(field !== undefined && { field })` spread pattern already distinguishes omitted from `null`; `folderId` follows it. A non-null `folderId` that doesn't match an existing folder returns 400 (validate before update rather than surfacing a Prisma FK error as a 500).
 
 Folder filtering happens client-side; the notes list is already fetched in full, so no query params.
 
