@@ -25,6 +25,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
+  if (typeof body !== 'object' || body === null) {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
   const { title, content, textContent, mode, isPinned, folderId } = body;
 
