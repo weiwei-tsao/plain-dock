@@ -737,7 +737,13 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       {/* Footer Info — tablet/desktop only */}
       <footer className="hidden items-center justify-between border-t border-zinc-900 bg-black px-6 py-2 text-[10px] font-bold tracking-widest text-zinc-600 uppercase md:flex">
         <div className="flex items-center gap-4">
-          <span>Synced: {new Date(note.updatedAt).toLocaleTimeString()}</span>
+          <span>
+            Synced:{' '}
+            {new Date(note.updatedAt).toLocaleString(undefined, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            })}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>
