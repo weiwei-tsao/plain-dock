@@ -35,7 +35,7 @@ folder   Folder? @relation(fields: [folderId], references: [id], onDelete: SetNu
 
 New routes, following existing conventions (serializers, error shape, `await params`):
 
-- `GET /api/folders` — list folders with per-folder note counts (Prisma `_count`).
+- `GET /api/folders` — list folders with per-folder note counts (Prisma `_count`), ordered by `orderBy: { createdAt: 'asc' }` so the UI is deterministic.
 - `POST /api/folders` — create folder; body `{ name: string }`, reject empty name with 400.
 - `PUT /api/folders/[id]` — rename; body `{ name: string }`.
 - `DELETE /api/folders/[id]` — delete folder (notes are un-filed by the DB constraint).
