@@ -58,7 +58,7 @@ Folder filtering happens client-side; the notes list is already fetched in full,
 ## Client State (`page.tsx`)
 
 - New state: `folders: Folder[]`, `activeFolderId: string | null` (`null` = All Notes).
-- Notes passed to the sidebar are filtered by `activeFolderId` before the existing search filter.
+- The sidebar receives the full notes list plus `activeFolderId` and filters by folder before the existing search filter (the full list is needed to derive per-folder counts).
 - Creating a note while a folder is active files it into that folder.
 - Search filters within the currently selected view: in All Notes it searches everything; inside a folder it searches that folder's notes (search runs on the already-filtered list, as today).
 - `mobileView` stays two-level (`'list' | 'editor'`) — folders live inside the existing sidebar panel.
