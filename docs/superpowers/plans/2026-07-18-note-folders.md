@@ -26,11 +26,11 @@ Run the dev server in one terminal: `npm run dev`. Authenticate curl once:
 
 ```bash
 PASS=$(grep '^APP_PASSWORD=' .env | cut -d= -f2- | tr -d '"')
-curl -s -c /tmp/pd-cookies -X POST http://localhost:3000/api/auth/login \
+curl -s -w '\n%{http_code}\n' -c /tmp/pd-cookies -X POST http://localhost:3000/api/auth/login \
   -H 'Content-Type: application/json' -d "{\"password\":\"$PASS\"}"
 ```
 
-Expected: `{"success":true}`. All later curl commands pass `-b /tmp/pd-cookies`.
+Expected: `{"success":true}` then `200`. All later curl commands pass `-b /tmp/pd-cookies` and `-w '\n%{http_code}\n'` — the HTTP status prints on the last line; always check it against the expected status.
 
 ---
 
@@ -332,30 +332,30 @@ export async function DELETE(
 - [ ] **Step 3: Verify with curl** (dev server + cookie jar from "Dev-Server Verification Setup")
 
 ```bash
-curl -s -b /tmp/pd-cookies -X POST http://localhost:3000/api/folders \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X POST http://localhost:3000/api/folders \
   -H 'Content-Type: application/json' -d '{"name":"Work"}'
 ```
-Expected: 201 body with `id`, `name: "Work"`, `noteCount: 0`, ISO dates. Save the id as `FID`.
+Expected: body with `id`, `name: "Work"`, `noteCount: 0`, ISO dates, then `201`. Save the id as `FID`.
 
 ```bash
-curl -s -b /tmp/pd-cookies http://localhost:3000/api/folders
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies http://localhost:3000/api/folders
 ```
-Expected: array containing Work.
+Expected: array containing Work, then `200`.
 
 ```bash
-curl -s -b /tmp/pd-cookies -X POST http://localhost:3000/api/folders \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X POST http://localhost:3000/api/folders \
   -H 'Content-Type: application/json' -d '{"name":"  "}'
 ```
-Expected: `{"error":"Folder name is required"}` (400).
+Expected: `{"error":"Folder name is required"}` then `400`.
 
 ```bash
-curl -s -b /tmp/pd-cookies -X PUT http://localhost:3000/api/folders/$FID \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X PUT http://localhost:3000/api/folders/$FID \
   -H 'Content-Type: application/json' -d '{"name":"Projects"}'
-curl -s -b /tmp/pd-cookies -X PUT http://localhost:3000/api/folders/nonexistent \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X PUT http://localhost:3000/api/folders/nonexistent \
   -H 'Content-Type: application/json' -d '{"name":"X"}'
-curl -s -b /tmp/pd-cookies -X DELETE http://localhost:3000/api/folders/$FID
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X DELETE http://localhost:3000/api/folders/$FID
 ```
-Expected: renamed folder JSON; `{"error":"Folder not found"}` (404); `{"success":true}`.
+Expected: renamed folder JSON then `200`; `{"error":"Folder not found"}` then `404`; `{"success":true}` then `200`.
 
 - [ ] **Step 4: Quality gate**
 
@@ -387,8 +387,17 @@ Change the top import line to `import type { NextRequest } from 'next/server';` 
 ```ts
 // POST /api/notes — Create a new empty note, optionally inside a folder
 export async function POST(request: NextRequest) {
-  // Body is optional for backward compatibility — an empty body means no folder
-  const body: unknown = await request.json().catch(() => ({}));
+  // An empty body stays valid for backward compatibility (noteApi.create with no
+  // folder), but malformed JSON is still a 400 like every other route.
+  const raw = await request.text();
+  let body: unknown = {};
+  if (raw.trim() !== '') {
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+  }
   const folderId = (body as { folderId?: unknown }).folderId;
 
   if (folderId != null) {
@@ -442,30 +451,36 @@ In the `prisma.note.update` data object, add one line after the `isPinned` sprea
 ```bash
 FID=$(curl -s -b /tmp/pd-cookies -X POST http://localhost:3000/api/folders \
   -H 'Content-Type: application/json' -d '{"name":"Inbox"}' | sed -E 's/.*"id":"([^"]+)".*/\1/')
-curl -s -b /tmp/pd-cookies -X POST http://localhost:3000/api/notes \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X POST http://localhost:3000/api/notes \
   -H 'Content-Type: application/json' -d "{\"folderId\":\"$FID\"}"
 ```
-Expected: 201 note with `"folderId":"<FID>"`. Save its id as `NID`.
+Expected: note with `"folderId":"<FID>"` then `201`. Save its id as `NID`.
 
 ```bash
-curl -s -b /tmp/pd-cookies -X POST http://localhost:3000/api/notes
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X POST http://localhost:3000/api/notes
 ```
-Expected: 201 note with `"folderId":null` (empty body still works).
+Expected: note with `"folderId":null` then `201` (empty body still works).
 
 ```bash
-curl -s -b /tmp/pd-cookies -X PUT http://localhost:3000/api/notes/$NID \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X POST http://localhost:3000/api/notes \
+  -H 'Content-Type: application/json' -d '{bad'
+```
+Expected: `{"error":"Invalid JSON body"}` then `400` (malformed JSON is not treated as an empty body).
+
+```bash
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X PUT http://localhost:3000/api/notes/$NID \
   -H 'Content-Type: application/json' -d '{"folderId":null}'
-curl -s -b /tmp/pd-cookies -X PUT http://localhost:3000/api/notes/$NID \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X PUT http://localhost:3000/api/notes/$NID \
   -H 'Content-Type: application/json' -d '{"folderId":"bogus"}'
-curl -s -b /tmp/pd-cookies -X PUT http://localhost:3000/api/notes/$NID \
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies -X PUT http://localhost:3000/api/notes/$NID \
   -H 'Content-Type: application/json' -d '{"title":"hello"}'
 ```
-Expected: `folderId:null`; `{"error":"Folder not found"}` (400); title updated with `folderId` untouched.
+Expected: `folderId:null` then `200`; `{"error":"Folder not found"}` then `400`; title updated with `folderId` untouched, then `200`.
 
 ```bash
-curl -s -b /tmp/pd-cookies http://localhost:3000/api/notes | head -c 400
+curl -s -w '\n%{http_code}\n' -b /tmp/pd-cookies http://localhost:3000/api/notes | tail -c 400
 ```
-Expected: list items include `"folderId"`.
+Expected: list items include `"folderId"`; status `200`.
 
 Also verify SetNull end-to-end: move `NID` into `$FID`, `DELETE /api/folders/$FID`, then `GET /api/notes/$NID` → `"folderId":null`.
 
@@ -602,6 +617,8 @@ In the JSX, add the new `Sidebar` props:
         />
 ```
 
+`onSelectFolder` intentionally maps straight to `setActiveFolderId`: per the spec, switching folders **never clears or auto-selects the active note** — the open note stays in the editor and simply loses its highlight in the filtered list. Do not add any `activeNoteId` handling here.
+
 - [ ] **Step 3: Add the folder section to `src/components/sidebar/Sidebar.tsx`**
 
 Update imports:
@@ -621,6 +638,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import Toast from '@/components/ui/Toast';
 ```
 
 Extend `SidebarProps`:
@@ -642,23 +660,36 @@ Destructure the six new props in the component signature. Add local state next t
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Folder | null>(null);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
 ```
 
-Add handlers after `handleTouchEnd`:
+Add handlers after `handleTouchEnd`. Every folder mutation catches failure and surfaces it — never a silent unhandled rejection. Create failure restores the input (with the typed name) so the user can retry:
 
 ```ts
   const submitNewFolder = async () => {
     const name = newFolderName.trim();
     setIsAddingFolder(false);
     setNewFolderName('');
-    if (name) await onCreateFolder(name);
+    if (!name) return;
+    try {
+      await onCreateFolder(name);
+    } catch {
+      setErrorToast('Failed to create folder');
+      setIsAddingFolder(true);
+      setNewFolderName(name);
+    }
   };
 
   const submitRename = async () => {
     const id = editingFolderId;
     const name = editingName.trim();
     setEditingFolderId(null);
-    if (id && name) await onRenameFolder(id, name);
+    if (!id || !name) return;
+    try {
+      await onRenameFolder(id, name);
+    } catch {
+      setErrorToast('Failed to rename folder');
+    }
   };
 ```
 
@@ -782,10 +813,18 @@ Before the closing `</aside>`, add the delete confirmation:
         message={`Delete "${deleteTarget?.name}"? Its notes will move to All Notes.`}
         confirmLabel="Delete"
         onConfirm={() => {
-          if (deleteTarget) onDeleteFolder(deleteTarget.id);
+          if (deleteTarget) {
+            onDeleteFolder(deleteTarget.id).catch(() => setErrorToast('Failed to delete folder'));
+          }
           setDeleteTarget(null);
         }}
         onCancel={() => setDeleteTarget(null)}
+      />
+      <Toast
+        open={errorToast !== null}
+        message={errorToast ?? ''}
+        variant="error"
+        onClose={() => setErrorToast(null)}
       />
 ```
 
@@ -798,6 +837,8 @@ Before the closing `</aside>`, add the delete confirmation:
 - Delete shows the ConfirmDialog; after confirm, its notes appear in All Notes, and if the folder was selected the view returns to All Notes.
 - Search inside a folder only matches that folder's notes.
 - Selecting a folder on a phone viewport stays on the list (no jump to editor).
+- Desktop: with a note open, switching folders keeps the note open in the editor (it just loses its list highlight) — it is never cleared or replaced.
+- Failure path: stop the dev server, attempt a folder delete/create — an error Toast appears instead of a silent failure (restart the server afterwards).
 
 - [ ] **Step 5: Quality gate and commit**
 
@@ -858,7 +899,10 @@ In the tablet/desktop controls (`hidden ... md:flex` div), insert between the Pi
 ```tsx
             <div className="relative">
               <button
-                onClick={() => setShowMoveMenu((v) => !v)}
+                onClick={() => {
+                  setShowExportMenu(false);
+                  setShowMoveMenu((v) => !v);
+                }}
                 className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
                 title="Move to folder"
               >
@@ -894,6 +938,15 @@ In the tablet/desktop controls (`hidden ... md:flex` div), insert between the Pi
                 </>
               )}
             </div>
+```
+
+The move and export dropdowns share the same header area and must be mutually exclusive — also change the **desktop Export button's** onClick from `() => setShowExportMenu((v) => !v)` to:
+
+```tsx
+                onClick={() => {
+                  setShowMoveMenu(false);
+                  setShowExportMenu((v) => !v);
+                }}
 ```
 
 - [ ] **Step 3: Phone overflow-menu entry**
@@ -971,6 +1024,7 @@ Add `folders={folders}` to the `<EditorCanvas ... />` props.
 - Race check: type into a note and immediately move it — after ~2s reload the page; the typed content AND the new folder must both be persisted.
 - Phone viewport: overflow menu → Move to → submenu works.
 - Sidebar counts update immediately after a move (no refresh).
+- Desktop: opening the move menu closes the export menu and vice versa — the two never show at once.
 
 - [ ] **Step 6: Quality gate and commit**
 
