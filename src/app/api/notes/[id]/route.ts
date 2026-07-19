@@ -26,11 +26,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { title, content, textContent, mode, isPinned } = body;
+  const { title, content, textContent, mode, isPinned, folderId } = body;
 
   // Validate mode
   if (mode !== undefined && mode !== 'PLAIN' && mode !== 'RICH') {
     return NextResponse.json({ error: 'Invalid mode. Must be PLAIN or RICH.' }, { status: 400 });
+  }
+
+  // folderId three-state: omitted = unchanged, null = move to All Notes, string = move to folder
+  if (folderId !== undefined && folderId !== null) {
+    if (typeof folderId !== 'string') {
+      return NextResponse.json({ error: 'Invalid folderId' }, { status: 400 });
+    }
+    const folder = await prisma.folder.findUnique({ where: { id: folderId } });
+    if (!folder) {
+      return NextResponse.json({ error: 'Folder not found' }, { status: 400 });
+    }
   }
 
   const existing = await prisma.note.findUnique({ where: { id } });
@@ -55,6 +66,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       ...(textContent !== undefined && { textContent }),
       ...(mode !== undefined && { mode }),
       ...(isPinned !== undefined && { isPinned }),
+      ...(folderId !== undefined && { folderId }),
       ...derivedTitle,
     },
   });
