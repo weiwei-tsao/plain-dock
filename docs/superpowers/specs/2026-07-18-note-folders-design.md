@@ -50,9 +50,10 @@ Folder filtering happens client-side; the notes list is already fetched in full,
 
 ## Types & Client API
 
-- `src/types.ts`: `Folder` interface (ISO string dates); `Note` and `NotePayload` gain `folderId: string | null`.
+- `src/types.ts`: `Folder` interface (ISO string dates); `Note` gains `folderId: string | null`; `NotePayload` gains **optional** `folderId?: string | null`.
 - `src/lib/serialize.ts`: `serializeFolder()` alongside `serializeNote()`.
 - `src/lib/api-client.ts`: `folderApi` with `list / create / rename / remove`.
+- `noteApi.update` and `persistChange` widen to `Partial<NotePayload>` so a folder move can send `{ folderId }` alone.
 
 ## Client State (`page.tsx`)
 
@@ -73,7 +74,8 @@ Below the search box, above the note list:
 ## Editor (`EditorCanvas`)
 
 - A "move to folder" dropdown (Folder icon) in the header action bar listing All Notes + folders.
-- Moving uses the existing `persistChange()` immediate-save path.
+- Moving goes through the existing `persistChange()` request queue but sends **only** `{ folderId }` — a partial update. `PUT /api/notes/[id]` already applies only the fields present in the body, so a move can never clobber content, and it must not: a full payload built from props would write back stale `note.content` while a debounced content save is pending.
+- Conversely, the auto-save payload built in `triggerSave` never includes `folderId`, so a content save queued around a move cannot revert it.
 
 ## Out of Scope (YAGNI)
 
