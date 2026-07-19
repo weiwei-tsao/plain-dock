@@ -28,7 +28,7 @@ folderId String?
 folder   Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 ```
 
-- `onDelete: SetNull` — deleting a folder returns its notes to All Notes via a DB constraint; no application code.
+- `onDelete: SetNull` — deleting a folder returns its notes to All Notes via a DB constraint; no server-side application code. (Client state still needs explicit reconciliation — see Client State.)
 - One migration. Production (Turso) applies the migration SQL manually, per the existing deployment workflow.
 
 ## API
@@ -62,6 +62,8 @@ Folder filtering happens client-side; the notes list is already fetched in full,
 - Creating a note while a folder is active files it into that folder.
 - Search filters within the currently selected view: in All Notes it searches everything; inside a folder it searches that folder's notes (search runs on the already-filtered list, as today).
 - `mobileView` stays two-level (`'list' | 'editor'`) — folders live inside the existing sidebar panel.
+- **Folder deletion reconciliation:** after `folderApi.remove(id)` succeeds, the client locally sets `folderId: null` on every cached note with that folder (in both `notes` and `activeNote`), mirroring the DB `SetNull`; no refetch. If `activeFolderId` was the deleted folder, it resets to `null` (All Notes).
+- **Folder switching:** the active note stays open unchanged — switching folders only changes the sidebar list filter, never clears or auto-selects the active note. An open note not in the selected folder simply shows no highlight in the list. (Consistent with today: only note deletion and phone back navigation clear the active note.)
 
 ## Sidebar UI
 
