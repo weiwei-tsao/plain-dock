@@ -69,7 +69,7 @@ Folder filtering happens client-side; the notes list is already fetched in full,
 
 Below the search box, above the note list:
 
-- Folder section: **All Notes** (total count) + each folder (name + count). Active row uses the existing `bg-zinc-800 text-white` style.
+- Folder section: **All Notes** (total count) + each folder (name + count; counts are hidden on phone, where the row space goes to the always-visible rename/delete actions). Active row uses the existing `bg-zinc-800 text-white` style.
 - "+ New Folder" entry at the end of the section; inline text input to create.
 - Hovering a folder row reveals rename (inline input) and delete actions; delete asks for confirmation.
 
