@@ -258,6 +258,7 @@ export default function MainPage() {
             onBack={handleBack}
             autoFocus={autoFocusNote}
             onAutoFocusHandled={() => setAutoFocusNote(false)}
+            folders={folders}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">
