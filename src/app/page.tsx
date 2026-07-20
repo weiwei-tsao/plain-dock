@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { Note } from '@/types';
-import { noteApi } from '@/lib/api-client';
+import type { Folder, Note } from '@/types';
+import { folderApi, noteApi } from '@/lib/api-client';
 
 const sortNotes = (list: Note[]): Note[] =>
   [...list].sort((a, b) => {
@@ -50,6 +50,8 @@ function NoteLoadingState() {
 
 export default function MainPage() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [activeNoteStatus, setActiveNoteStatus] = useState<ActiveNoteStatus>('idle');
@@ -68,6 +70,15 @@ export default function MainPage() {
   useEffect(() => {
     loadNotes();
   }, [loadNotes]);
+
+  const loadFolders = useCallback(async () => {
+    const data = await folderApi.list();
+    setFolders(data);
+  }, []);
+
+  useEffect(() => {
+    loadFolders();
+  }, [loadFolders]);
 
   // Fetch full note (with content) when selection changes
   useEffect(() => {
@@ -132,7 +143,7 @@ export default function MainPage() {
 
   const handleCreateNote = useCallback(async () => {
     await cleanupEmptyNote();
-    const newNote = await noteApi.create();
+    const newNote = await noteApi.create(activeFolderId);
     setNotes((prev) => sortNotes([newNote, ...prev]));
     setActiveNote(null);
     setActiveNoteStatus('loading');
@@ -140,7 +151,7 @@ export default function MainPage() {
     setAutoFocusNote(true);
     setMobileView('editor');
     loadNotes().catch(() => {});
-  }, [cleanupEmptyNote, loadNotes]);
+  }, [cleanupEmptyNote, loadNotes, activeFolderId]);
 
   const handleDeleteNote = async (id: string) => {
     await noteApi.delete(id);
@@ -160,13 +171,35 @@ export default function MainPage() {
   };
 
   const handleRefresh = useCallback(async () => {
-    await loadNotes();
+    await Promise.all([loadNotes(), loadFolders()]);
     if (activeNoteId) {
       setActiveNote(null);
       setActiveNoteStatus('loading');
       setNoteLoadAttempt((attempt) => attempt + 1);
     }
-  }, [loadNotes, activeNoteId]);
+  }, [loadNotes, loadFolders, activeNoteId]);
+
+  const handleCreateFolder = useCallback(async (name: string) => {
+    const folder = await folderApi.create(name);
+    setFolders((prev) => [...prev, folder]);
+  }, []);
+
+  const handleRenameFolder = useCallback(async (id: string, name: string) => {
+    const folder = await folderApi.rename(id, name);
+    setFolders((prev) => prev.map((f) => (f.id === id ? folder : f)));
+  }, []);
+
+  // Mirrors the DB's ON DELETE SET NULL in client state — no refetch needed
+  const handleDeleteFolder = useCallback(
+    async (id: string) => {
+      await folderApi.remove(id);
+      setFolders((prev) => prev.filter((f) => f.id !== id));
+      setNotes((prev) => prev.map((n) => (n.folderId === id ? { ...n, folderId: null } : n)));
+      setActiveNote((prev) => (prev?.folderId === id ? { ...prev, folderId: null } : prev));
+      if (activeFolderId === id) setActiveFolderId(null);
+    },
+    [activeFolderId],
+  );
 
   const handleRetryNoteLoad = useCallback(() => {
     setActiveNote(null);
@@ -180,6 +213,12 @@ export default function MainPage() {
       <div className={mobileView === 'editor' ? 'hidden md:contents' : 'contents'}>
         <Sidebar
           notes={notes}
+          folders={folders}
+          activeFolderId={activeFolderId}
+          onSelectFolder={setActiveFolderId}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolder={handleDeleteFolder}
           activeNoteId={activeNoteId}
           onSelectNote={handleSelectNote}
           onCreateNote={handleCreateNote}
@@ -219,6 +258,7 @@ export default function MainPage() {
             onBack={handleBack}
             autoFocus={autoFocusNote}
             onAutoFocusHandled={() => setAutoFocusNote(false)}
+            folders={folders}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center text-zinc-500">

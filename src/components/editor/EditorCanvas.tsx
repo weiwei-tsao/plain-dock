@@ -12,7 +12,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
-import type { Note, NotePayload } from '@/types';
+import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
 import { sanitizeHTML, wrapPlainText, getNoteTextContent } from '@/lib/sanitizer';
@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   MoreHorizontal,
+  Folder as FolderIcon,
 } from 'lucide-react';
 
 async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<string> {
@@ -187,6 +188,7 @@ interface EditorCanvasProps {
   onBack?: () => void;
   autoFocus?: boolean;
   onAutoFocusHandled?: () => void;
+  folders: Folder[];
 }
 
 export interface EditorCanvasHandle {
@@ -194,7 +196,7 @@ export interface EditorCanvasHandle {
 }
 
 const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function EditorCanvas(
-  { note, onUpdate, onDelete, onBack, autoFocus, onAutoFocusHandled },
+  { note, onUpdate, onDelete, onBack, autoFocus, onAutoFocusHandled, folders },
   ref,
 ) {
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
@@ -205,6 +207,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
@@ -310,7 +313,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   }, [plainContent, note.mode]);
 
   const persistChange = useCallback(
-    (payload: NotePayload) => {
+    (payload: Partial<NotePayload>) => {
       setSaveState('SAVING');
       requestQueue.current = requestQueue.current.then(async () => {
         try {
@@ -374,6 +377,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       mode: note.mode,
       isPinned: !note.isPinned,
     });
+  };
+
+  // Sends ONLY { folderId } — a full payload here could clobber content
+  // that a pending debounced save hasn't flushed yet (see design spec).
+  const handleMoveToFolder = (folderId: string | null) => {
+    setShowMoveMenu(false);
+    setShowOverflowMenu(false);
+    if (folderId !== note.folderId) persistChange({ folderId });
   };
 
   const handleSwitchMode = () => {
@@ -503,7 +514,10 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <button
                 onClick={() => {
                   setShowOverflowMenu((v) => {
-                    if (v) setShowExportMenu(false);
+                    if (v) {
+                      setShowExportMenu(false);
+                      setShowMoveMenu(false);
+                    }
                     return !v;
                   });
                 }}
@@ -519,6 +533,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                     onClick={() => {
                       setShowOverflowMenu(false);
                       setShowExportMenu(false);
+                      setShowMoveMenu(false);
                     }}
                   />
                   <div className="absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
@@ -533,6 +548,40 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                       <Copy className="h-4 w-4" />
                       Copy
                     </button>
+                    <button
+                      onClick={() => setShowMoveMenu((v) => !v)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    >
+                      <FolderIcon className="h-4 w-4" />
+                      Move to
+                    </button>
+                    {showMoveMenu && (
+                      <div className="max-h-48 overflow-y-auto border-y border-zinc-800 bg-black/20 py-1">
+                        <button
+                          onClick={() => handleMoveToFolder(null)}
+                          className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
+                            note.folderId === null
+                              ? 'text-indigo-400'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          All Notes
+                        </button>
+                        {folders.map((folder) => (
+                          <button
+                            key={folder.id}
+                            onClick={() => handleMoveToFolder(folder.id)}
+                            className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
+                              note.folderId === folder.id
+                                ? 'text-indigo-400'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <span className="truncate">{folder.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <button
                       onClick={() => setShowExportMenu((v) => !v)}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
@@ -609,6 +658,50 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
 
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowExportMenu(false);
+                  setShowMoveMenu((v) => !v);
+                }}
+                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                title="Move to folder"
+              >
+                <FolderIcon className="h-4 w-4" />
+              </button>
+
+              {showMoveMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
+                  <div className="absolute top-full right-0 z-50 mt-1 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
+                    <button
+                      onClick={() => handleMoveToFolder(null)}
+                      className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                        note.folderId === null
+                          ? 'text-indigo-400'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      All Notes
+                    </button>
+                    {folders.map((folder) => (
+                      <button
+                        key={folder.id}
+                        onClick={() => handleMoveToFolder(folder.id)}
+                        className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                          note.folderId === folder.id
+                            ? 'text-indigo-400'
+                            : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <span className="truncate">{folder.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             <button
               onClick={handleSwitchMode}
               className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
@@ -638,7 +731,10 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
             <div className="relative">
               <button
-                onClick={() => setShowExportMenu((v) => !v)}
+                onClick={() => {
+                  setShowMoveMenu(false);
+                  setShowExportMenu((v) => !v);
+                }}
                 className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
                 title="Export"
               >
