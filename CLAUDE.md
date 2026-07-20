@@ -63,7 +63,7 @@ No test runner is configured.
 
 ### Server-side
 
-- `prisma/schema.prisma` — Single `Note` model (SQLite). Fields: id, title, content, textContent, mode, isPinned, createdAt, updatedAt.
+- `prisma/schema.prisma` — `Note` and `Folder` models (SQLite). Note fields: id, title, content, textContent, mode, isPinned, folderId, createdAt, updatedAt. Folder fields: id, name, createdAt, updatedAt; `Note.folderId` is nullable with `onDelete: SetNull`.
 - `src/lib/db.ts` - Singleton PrismaClient. Uses file SQLite for `DATABASE_URL=file:...` with WAL mode enabled; uses Turso/libSQL adapter for `DATABASE_URL=libsql://...` or `https://...`. Imports `server-only`.
 - `src/lib/auth.ts` — JWT sign/verify using `jsonwebtoken`. Imports `server-only`.
 - `src/lib/serialize.ts` — Converts Prisma `Note` (with Date fields) to the client `Note` type (with ISO string dates). Imports `server-only`.
@@ -72,10 +72,12 @@ No test runner is configured.
 - `src/app/api/auth/logout/route.ts` — POST: clears the session cookie.
 - `src/app/api/notes/route.ts` — GET: lists notes (content field omitted for lightweight response). POST: creates empty note.
 - `src/app/api/notes/[id]/route.ts` — GET: full note with content. PUT: partial update. DELETE.
+- `src/app/api/folders/route.ts` — GET: lists folders with note counts (createdAt asc). POST: creates folder.
+- `src/app/api/folders/[id]/route.ts` — PUT: rename. DELETE: delete (notes return to All Notes via SetNull).
 
 ### Client-side
 
-- `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `isSidebarOpen`, and `mobileView` (`'list' | 'editor'`) state. `mobileView` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. On tablet/desktop both panels are always visible via `md:contents`/`md:flex` overrides.
+- `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `isSidebarOpen`, `folders`, `activeFolderId`, and `mobileView` (`'list' | 'editor'`) state. `mobileView` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. On tablet/desktop both panels are always visible via `md:contents`/`md:flex` overrides.
 - `src/app/login/page.tsx` — Login form, calls `/api/auth/login`, redirects to `/` on success.
 - `src/lib/api-client.ts` — Typed fetch wrapper (`noteApi`) for all `/api/notes` endpoints.
 - `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: Tiptap for RICH, `<textarea>` for PLAIN. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Handles paste sanitization, mode switching, pin toggle, clipboard copy (plain + rich HTML). Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
@@ -138,6 +140,7 @@ docker compose up -d --build   # rebuild after code changes
 ```bash
 turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
 turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
+turso db shell your-database < prisma/migrations/20260719031554_add_note_folders/migration.sql
 ```
 
 - Requires a Turso database and auth token.
