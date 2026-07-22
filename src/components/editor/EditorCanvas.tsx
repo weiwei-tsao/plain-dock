@@ -319,6 +319,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         try {
           const updated = await noteApi.update(note.id, payload);
           onUpdate(updated);
+          setLocalTitle(updated.title);
           setSaveState('SAVED');
           setTimeout(() => setSaveState('IDLE'), 2000);
         } catch {
