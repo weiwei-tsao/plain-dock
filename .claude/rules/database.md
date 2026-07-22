@@ -8,7 +8,7 @@
 
 ## Schema
 
-- Single `Note` model in `prisma/schema.prisma`.
+- `Note` and `Folder` models in `prisma/schema.prisma`; `Note.folderId` is a nullable FK with `onDelete: SetNull`.
 - SQLite database with WAL mode enabled (set in `db.ts` via `PRAGMA journal_mode = WAL`).
 - IDs use `cuid()` default.
 - `updatedAt` uses Prisma's `@updatedAt` — automatically set on every update.

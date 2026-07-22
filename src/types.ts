@@ -10,6 +10,7 @@ export interface Note {
   textContent: string;
   mode: NoteMode;
   isPinned: boolean;
+  folderId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,4 +23,13 @@ export interface NotePayload {
   textContent: string;
   mode: NoteMode;
   isPinned?: boolean;
+  folderId?: string | null;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  noteCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
