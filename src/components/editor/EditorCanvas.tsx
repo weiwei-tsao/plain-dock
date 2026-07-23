@@ -313,9 +313,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   }, [plainContent, note.mode]);
 
   const persistChange = useCallback(
-    (payload: Partial<NotePayload>, options: { showSaveState?: boolean } = {}) => {
-      const showSaveState = options.showSaveState ?? true;
-      if (showSaveState) setSaveState('SAVING');
+    (payload: Partial<NotePayload>, options: { showProgressAndSuccess?: boolean } = {}) => {
+      const showProgressAndSuccess = options.showProgressAndSuccess ?? true;
+      if (showProgressAndSuccess) setSaveState('SAVING');
 
       requestQueue.current = requestQueue.current.then(async () => {
         try {
@@ -323,12 +323,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           onUpdate(updated);
           setLocalTitle(updated.title);
 
-          if (showSaveState) {
+          if (showProgressAndSuccess) {
             setSaveState('SAVED');
             setTimeout(() => setSaveState('IDLE'), 2000);
           }
         } catch {
-          if (showSaveState) setSaveState('FAILED');
+          setSaveState('FAILED');
         }
       });
     },
@@ -409,7 +409,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           textContent: getNoteTextContent(richHTML),
           mode: NoteMode.RICH,
         },
-        { showSaveState: hasMeaningfulDraftContent() },
+        { showProgressAndSuccess: hasMeaningfulDraftContent() },
       );
     }
   };
