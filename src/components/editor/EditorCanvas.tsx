@@ -313,15 +313,20 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   }, [plainContent, note.mode]);
 
   const persistChange = useCallback(
-    (payload: Partial<NotePayload>) => {
-      setSaveState('SAVING');
+    (payload: Partial<NotePayload>, options: { showProgressAndSuccess?: boolean } = {}) => {
+      const showProgressAndSuccess = options.showProgressAndSuccess ?? true;
+      if (showProgressAndSuccess) setSaveState('SAVING');
+
       requestQueue.current = requestQueue.current.then(async () => {
         try {
           const updated = await noteApi.update(note.id, payload);
           onUpdate(updated);
           setLocalTitle(updated.title);
-          setSaveState('SAVED');
-          setTimeout(() => setSaveState('IDLE'), 2000);
+
+          if (showProgressAndSuccess) {
+            setSaveState('SAVED');
+            setTimeout(() => setSaveState('IDLE'), 2000);
+          }
         } catch {
           setSaveState('FAILED');
         }
@@ -388,6 +393,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     if (folderId !== note.folderId) persistChange({ folderId });
   };
 
+  const hasMeaningfulDraftContent = () =>
+    localTitle.trim() !== '' || plainContentRef.current.trim() !== '';
+
   const handleSwitchMode = () => {
     if (note.mode === NoteMode.RICH) {
       setModeConfirmHasImages(editor?.getHTML().includes('<img') ?? false);
@@ -395,11 +403,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     } else {
       const richHTML = wrapPlainText(plainContentRef.current);
       editor?.commands.setContent(richHTML);
-      persistChange({
-        content: richHTML,
-        textContent: getNoteTextContent(richHTML),
-        mode: NoteMode.RICH,
-      });
+      persistChange(
+        {
+          content: richHTML,
+          textContent: getNoteTextContent(richHTML),
+          mode: NoteMode.RICH,
+        },
+        { showProgressAndSuccess: hasMeaningfulDraftContent() },
+      );
     }
   };
 
