@@ -17,6 +17,8 @@ npm run lint             # ESLint check on src/
 npm run lint:fix         # ESLint auto-fix
 npm run format           # Prettier format src/
 npm run format:check     # Prettier check (no write)
+npm run docker:sync-from-turso  # Manual Turso -> Docker SQLite import with backup
+npm run test:sync        # Tests for the manual Docker sync command
 npm run typecheck        # TypeScript type check (tsc --noEmit)
 npx prisma migrate dev   # Create/apply migrations during development
 npx prisma studio        # GUI for browsing the SQLite database
@@ -38,6 +40,12 @@ No test runner is configured.
 - `TURSO_AUTH_TOKEN` - Turso database auth token
 - `APP_PASSWORD` - Single shared password for login
 - `JWT_SECRET` - Secret for signing JWT tokens
+
+**Manual Docker sync from Turso** - optional operator command for issue #26:
+- `TURSO_DATABASE_URL` - source Turso/libSQL URL for import into Docker SQLite
+- `TURSO_AUTH_TOKEN` - source Turso auth token
+- `DOCKER_DATABASE_PATH` - optional target path, defaults to `./data/notes.db`
+- `npm run docker:sync-from-turso` reads `.env`, backs up the existing target database under `./data/backups/` including SQLite WAL sidecar files when present, runs local migrations, then replaces local Docker `Folder` and `Note` rows with the Turso snapshot.
 
 **Important:** Prisma CLI reads `.env` by default. If using `.env.local`, add `--env-file .env.local` to Prisma commands. Next.js reads both files (with `.env.local` taking precedence). `TURSO_AUTH_TOKEN` is required only when `DATABASE_URL` points to Turso/libSQL.
 
@@ -127,11 +135,14 @@ npm run build && npm run start  # production mode
 docker compose up -d           # build image and start container
 docker compose down            # stop
 docker compose up -d --build   # rebuild after code changes
+npm run docker:sync-from-turso # manually replace ./data/notes.db with Turso snapshot
 ```
 
 - Requires Docker installed. No Node.js needed on the host.
 - Migrations run automatically on container startup.
 - Database is persisted to `./data/notes.db` via volume mount.
+- Manual Turso sync is never run automatically; stop the container first, then run the command so SQLite is not being written concurrently.
+- Do not rely on a fixed Docker container name. Use `docker compose ps`, `docker compose logs`, and `docker compose down` from the intended checkout. If an old container named `plaindock` blocks startup, inspect it with `docker ps -a --filter "name=^/plaindock$"` and remove the stale container with `docker rm -f plaindock`; this does not remove `./data/notes.db`.
 - `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
 - Container auto-restarts on crash (`restart: unless-stopped`).
 

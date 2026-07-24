@@ -74,6 +74,44 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
 
 Data is persisted to `./data/notes.db` on the host via a volume mount — safe across restarts and rebuilds. Migrations run automatically on every container start.
 
+Docker Compose generates the container name from the project and service name. If an older PlainDock container created by a previous version still owns the fixed name `plaindock`, `docker compose up -d` may fail with `container name "/plaindock" is already in use`. Inspect and remove that stale container before starting:
+
+```bash
+docker ps -a --filter "name=^/plaindock$"
+docker rm -f plaindock
+docker compose up -d
+```
+
+Removing the stale container does not delete `./data/notes.db`.
+
+### Manual Docker Sync from Turso
+
+To replace the local Docker SQLite data with a snapshot from the online Turso database, add the Turso sync settings to `.env`:
+
+```env
+TURSO_DATABASE_URL="libsql://your-db.turso.io"
+TURSO_AUTH_TOKEN="your-token"
+```
+
+Then stop the app container and run the manual sync command:
+
+```bash
+docker compose down
+npm run docker:sync-from-turso
+docker compose up -d
+```
+
+The command reads `.env`, prepares `./data/notes.db`, backs up any existing database to `./data/backups/` including SQLite WAL sidecar files when present, then replaces local Docker `Folder` and `Note` rows with the Turso snapshot.
+
+For Docker-only hosts, rebuild the image and run the same script inside a one-off container:
+
+```bash
+docker compose build
+docker compose down
+docker compose run --rm plaindock node scripts/sync-turso-to-docker.mjs
+docker compose up -d
+```
+
 ## Vercel Deployment with Turso
 
 Vercel serverless functions cannot persist writes to a local SQLite file. Use Turso/libSQL for Vercel while keeping the Prisma schema on SQLite.
@@ -110,6 +148,8 @@ For existing local SQLite data, back up the database first, import it with Turso
 | `npm run lint:fix` | ESLint auto-fix |
 | `npm run format` | Prettier format |
 | `npm run format:check` | Prettier check (no write) |
+| `npm run docker:sync-from-turso` | Manually replace Docker SQLite data with a backed-up Turso snapshot |
+| `npm run test:sync` | Run tests for the Turso-to-Docker sync command |
 | `npm run typecheck` | TypeScript type check |
 | `npx prisma migrate dev` | Create and apply database migrations |
 | `npx prisma studio` | Browse the database via GUI |
