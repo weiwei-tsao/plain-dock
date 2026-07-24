@@ -74,6 +74,16 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Pla
 
 Data is persisted to `./data/notes.db` on the host via a volume mount — safe across restarts and rebuilds. Migrations run automatically on every container start.
 
+Docker Compose generates the container name from the project and service name. If an older PlainDock container created by a previous version still owns the fixed name `plaindock`, `docker compose up -d` may fail with `container name "/plaindock" is already in use`. Inspect and remove that stale container before starting:
+
+```bash
+docker ps -a --filter "name=^/plaindock$"
+docker rm -f plaindock
+docker compose up -d
+```
+
+Removing the stale container does not delete `./data/notes.db`.
+
 ### Manual Docker Sync from Turso
 
 To replace the local Docker SQLite data with a snapshot from the online Turso database, add the Turso sync settings to `.env`:

@@ -74,6 +74,16 @@
 
 数据通过卷挂载持久化到宿主机 `./data/notes.db`，重启和重建均不丢失数据。每次容器启动时自动执行数据库迁移。
 
+Docker Compose 会根据 project 和 service 自动生成容器名。如果旧版本创建的 PlainDock 容器仍然占用了固定名称 `plaindock`，`docker compose up -d` 可能报错：`container name "/plaindock" is already in use`。先检查并删除这个旧容器，再启动：
+
+```bash
+docker ps -a --filter "name=^/plaindock$"
+docker rm -f plaindock
+docker compose up -d
+```
+
+删除旧容器不会删除 `./data/notes.db`。
+
 ### 手动从 Turso 同步到 Docker
 
 如果要用线上 Turso 数据替换本地 Docker SQLite 数据，在 `.env` 中增加 Turso 同步配置：

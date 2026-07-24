@@ -142,6 +142,7 @@ npm run docker:sync-from-turso # manually replace ./data/notes.db with Turso sna
 - Migrations run automatically on container startup.
 - Database is persisted to `./data/notes.db` via volume mount.
 - Manual Turso sync is never run automatically; stop the container first, then run the command so SQLite is not being written concurrently.
+- Do not rely on a fixed Docker container name. Use `docker compose ps`, `docker compose logs`, and `docker compose down` from the intended checkout. If an old container named `plaindock` blocks startup, inspect it with `docker ps -a --filter "name=^/plaindock$"` and remove the stale container with `docker rm -f plaindock`; this does not remove `./data/notes.db`.
 - `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
 - Container auto-restarts on crash (`restart: unless-stopped`).
 
