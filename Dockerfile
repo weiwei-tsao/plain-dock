@@ -30,6 +30,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/scripts ./scripts
 # Copy full node_modules so the Prisma CLI has its complete dependency tree
 COPY --from=deps /app/node_modules ./node_modules
 
