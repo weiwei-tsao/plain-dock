@@ -60,23 +60,38 @@ Clipboard
    │
    ├─ image/*           → existing resizeImageToDataURL path (unchanged)
    │
-   ├─ text/html          text/plain (no html, or html path unused)
-   │       │                   │
-   │       │                   ├─ terminalTable.detect(text)
-   │       │                   │     ├─ 'table'  → markdown table string
-   │       │                   │     ├─ 'code'   → fenced ```text block
-   │       │                   │     └─ 'none'   → text unchanged
-   │       │                   │
-   │       │                   └─ markdownToHtml(...)  [markdown-it]
-   │       │                             │
-   │       └─────────────────────────────┤
-   │                                      ▼
-   │                              sanitizeHTML(html)
-   │                     (strip danger, normalize tags, allow table
-   │                      tags, collapse empty-paragraph runs)
-   │                                      │
-   │                                      ▼
-   │                         editor.commands.insertContent(clean)
+   ├─ text/html present?
+   │       │
+   │       ├─ no  ─────────────────────────────┐
+   │       │                                    │
+   │       └─ yes, but has no <table> AND       │
+   │          text/plain's markdown pipeline    │
+   │          resolves to a real <table>        │
+   │          → prefer the text/plain result    │
+   │          (terminal/markdown table beats     │
+   │           a lossy per-line HTML dump)       │
+   │       │                                    │
+   │       └─ yes, and neither condition above ─┤
+   │          applies → use html as-is           │
+   │                                              ▼
+   │                                    text/plain path:
+   │                                    terminalTable.detect(text)
+   │                                      ├─ 'table' → markdown table string
+   │                                      ├─ 'code'  → fenced ```text block
+   │                                      └─ 'none'  → text unchanged
+   │                                              │
+   │                                    markdownToHtml(...) [markdown-it]
+   │                                              │
+   ▼                                              ▼
+sanitizeHTML(html)  ◄────────────────────────────┘
+(strip danger, normalize tags, allow table tags —
+ security/allowlist semantics only, unchanged contract)
+   │
+   ▼
+collapseEmptyParagraphs(clean)   ← paste-only step, NOT part of
+   │                                sanitizeHTML's contract
+   ▼
+editor.commands.insertContent(clean)
 ```
 
 ### 1. Tiptap table support
@@ -92,9 +107,13 @@ Tiptap's table NodeView wraps the rendered `<table>` in
 `<div class="tableWrapper">` automatically (confirmed against v2.x
 behavior). `globals.css` gets a matching block: `.tableWrapper` scrolls
 horizontally (`overflow-x: auto`), `table` uses `border-collapse: collapse`
-and `table-layout: fixed`, cell/header borders and header background follow
-the existing zinc dark palette (`styling.md`), consistent with how the rest
-of ProseMirror content is styled in that file today.
+with **no** `table-layout: fixed` and **no** forced `width: 100%` — columns
+stay content-sized (`table-layout: auto`, the default) so a table with
+long cell content grows to fit and the wrapper scrolls, rather than
+compressing every column to fit the pane. Cell/header borders and header
+background follow the existing zinc dark palette (`styling.md`),
+consistent with how the rest of ProseMirror content is styled in that file
+today.
 
 ### 2. Sanitizer: table pass-through
 
@@ -115,12 +134,19 @@ lose them same as today. Acceptable per non-goals.
 
 ### 3. Blank-line / empty-paragraph collapse
 
-New step in `sanitizeHTML`, after Final Cleanup, operating on the
-resulting fragment's top-level children: collapse consecutive "empty"
-paragraphs (no text content, or only a `<br>`) into at most one, and drop
-leading/trailing empty ones entirely. Runs once per `sanitizeHTML` call,
-so it covers both the direct HTML-paste path and the markdown-it-generated
-HTML path (plain-text paste) through the same code.
+This is paste normalization, not a change to what `sanitizeHTML` means —
+`sanitizeHTML`'s contract (security stripping + tag/style allowlisting)
+stays exactly as it is today, since other future callers of it shouldn't
+inherit a paste-specific opinion about blank lines. New standalone
+exported function instead: `collapseEmptyParagraphs(html: string): string`
+in `sanitizer/index.ts`, operating on parsed top-level block children —
+collapse consecutive "empty" paragraphs (no text content, or only a
+`<br>`) into at most one, and drop leading/trailing empty ones entirely.
+
+The paste handler calls it explicitly, after `sanitizeHTML`, on both the
+direct HTML-paste path and the markdown-it-generated HTML path — so both
+are covered, but by an explicit second step at the call site rather than
+folded into `sanitizeHTML` itself.
 
 The plain-text path (`wrapPlainText`, still used for PLAIN→RICH mode
 switching) already collapses multi-blank-line runs via its
@@ -198,23 +224,50 @@ Heuristic:
 
 ### 6. Paste handler changes (`EditorCanvas.tsx`)
 
-In `handlePaste`'s `text/plain` branch (the `else if (text)` arm), replace
-the direct `wrapPlainText(text)` call with:
+Factor the text/plain → HTML conversion into one helper so both branches
+below can call it without duplicating the terminal-table/markdown-it
+logic:
 
 ```ts
-const detection = detectTerminalTable(text);
-const markdownSource =
-  detection.type === 'table'
-    ? detection.markdown
-    : detection.type === 'code'
-      ? '```text\n' + text + '\n```'
-      : text;
-const clean = sanitizeHTML(markdownToHtml(markdownSource));
-editor.commands.insertContent(clean);
+function textToCleanHtml(text: string): string {
+  const detection = detectTerminalTable(text);
+  const markdownSource =
+    detection.type === 'table'
+      ? detection.markdown
+      : detection.type === 'code'
+        ? '```text\n' + text + '\n```'
+        : text;
+  return sanitizeHTML(markdownToHtml(markdownSource));
+}
 ```
 
-The `text/html` branch is unchanged except that `sanitizeHTML` now lets
-tables through and collapses empty-paragraph runs, per sections 2–3 above.
+`handlePaste` branching changes from "html wins whenever present" to:
+prefer the text/plain result when the HTML has no real `<table>` of its
+own *and* the text/plain content resolves to one — i.e. a terminal/
+Markdown table in the plain-text clipboard entry beats a lossy per-line
+HTML dump that never had table structure to begin with. Any other
+mix (html has its own table, or text doesn't resolve to one) keeps HTML's
+existing priority, since HTML is normally the richer representation
+(links, inline marks, structure) and shouldn't be downgraded to text
+without a concrete reason:
+
+```ts
+if (html && html.trim() !== '') {
+  const htmlHasTable = /<table[\s>]/i.test(html);
+  let clean = sanitizeHTML(html);
+
+  if (!htmlHasTable && text) {
+    const fromText = textToCleanHtml(text);
+    if (/<table[\s>]/i.test(fromText)) clean = fromText;
+  }
+
+  editor.commands.insertContent(collapseEmptyParagraphs(clean));
+  return true;
+} else if (text) {
+  editor.commands.insertContent(collapseEmptyParagraphs(textToCleanHtml(text)));
+  return true;
+}
+```
 
 ## Testing
 
@@ -244,7 +297,8 @@ VS Code code with blank lines).
 ## Files touched
 
 - `src/components/editor/EditorCanvas.tsx` — table extensions registered,
-  paste handler text branch rewritten
+  `handlePaste` rewritten (html-vs-text-table priority, shared
+  `textToCleanHtml` helper, `collapseEmptyParagraphs` call sites)
 - `src/lib/sanitizer/config.ts` — table tags allowlisted
 - `src/lib/sanitizer/index.ts` — table downgrade removed, empty-paragraph
   collapse added, header comment updated
