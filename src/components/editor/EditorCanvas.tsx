@@ -20,7 +20,14 @@ import TableCell from '@tiptap/extension-table-cell';
 import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
-import { sanitizeHTML, wrapPlainText, getNoteTextContent } from '@/lib/sanitizer';
+import {
+  sanitizeHTML,
+  collapseEmptyParagraphs,
+  markdownToHtml,
+  detectTerminalTable,
+  wrapPlainText,
+  getNoteTextContent,
+} from '@/lib/sanitizer';
 import RichToolbar from './RichToolbar';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
@@ -64,6 +71,17 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
     img.onerror = reject;
     img.src = objectUrl;
   });
+}
+
+function textToCleanHtml(text: string): string {
+  const detection = detectTerminalTable(text);
+  const markdownSource =
+    detection.type === 'table'
+      ? detection.markdown
+      : detection.type === 'code'
+        ? '```text\n' + text + '\n```'
+        : text;
+  return sanitizeHTML(markdownToHtml(markdownSource));
 }
 
 type TiptapMark = { type: string; attrs?: Record<string, unknown> };
@@ -281,12 +299,24 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         const text = event.clipboardData?.getData('text/plain');
 
         if (html && html.trim() !== '') {
-          const clean = sanitizeHTML(html);
-          editor.commands.insertContent(clean);
+          // HTML is normally the richer representation (links, inline marks,
+          // structure) and wins by default — UNLESS it has no real table of
+          // its own while the plain-text entry resolves to one. That case
+          // means the source's HTML was a lossy per-line dump (common from
+          // VS Code/terminal HTML clipboard exports) while text/plain still
+          // carries a parseable terminal/Markdown table — prefer the table.
+          const htmlHasTable = /<table[\s>]/i.test(html);
+          let clean = sanitizeHTML(html);
+
+          if (!htmlHasTable && text) {
+            const fromText = textToCleanHtml(text);
+            if (/<table[\s>]/i.test(fromText)) clean = fromText;
+          }
+
+          editor.commands.insertContent(collapseEmptyParagraphs(clean));
           return true;
         } else if (text) {
-          const clean = wrapPlainText(text);
-          editor.commands.insertContent(clean);
+          editor.commands.insertContent(collapseEmptyParagraphs(textToCleanHtml(text)));
           return true;
         }
         return false;
