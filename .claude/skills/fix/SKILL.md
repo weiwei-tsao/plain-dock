@@ -26,7 +26,7 @@ Work through the project's architecture layers systematically. Follow the data �
 
 **Client action path:**
 ```
-User interaction (page.tsx state: notes, activeNoteId, mobileView)
+User interaction (page.tsx state: notes, activeNoteId, mobilePanel)
   → Component prop callback (onSelectNote / onCreateNote / onDelete)
   → noteApi call (src/lib/api-client.ts)
   → API route (src/app/api/notes/ or src/app/api/notes/[id]/)

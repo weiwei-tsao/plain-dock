@@ -85,24 +85,26 @@ No test runner is configured.
 
 ### Client-side
 
-- `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `isSidebarOpen`, `folders`, `activeFolderId`, and `mobileView` (`'list' | 'editor'`) state. `mobileView` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. On tablet/desktop both panels are always visible via `md:contents`/`md:flex` overrides.
+- `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `folders`, `activeFolderId`, pane-layout state (`folderWidth`, `notesWidth`, `folderCollapsed`, `viewportTier`), and mobile-nav state (`mobilePanel: 'list' | 'editor'`, `showFolders`). `mobilePanel` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. `showFolders` layers a full-screen Folders step on top of that stack on phones.
 - `src/app/login/page.tsx` — Login form, calls `/api/auth/login`, redirects to `/` on success.
 - `src/lib/api-client.ts` — Typed fetch wrapper (`noteApi`) for all `/api/notes` endpoints.
 - `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: Tiptap for RICH, `<textarea>` for PLAIN. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Handles paste sanitization, mode switching, pin toggle, clipboard copy (plain + rich HTML). Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
 - `src/components/editor/RichToolbar.tsx` — Formatting toolbar for Tiptap. Horizontally scrollable single row on phone; wraps on tablet/desktop.
-- `src/components/sidebar/Sidebar.tsx` — Note list with search filtering, pin indicators. Width is `w-full md:w-56 lg:w-80`. Collapse toggle is hidden on phone (navigation is handled by `mobileView` in `page.tsx`).
+- `src/components/sidebar/FolderSidebar.tsx` — Folder list ("All Notes" + folders with counts) with inline create/rename/delete. `variant: 'pane' | 'mobile-fullscreen'` — pane mode renders inline with its own resizable width and edge toggle chevron; mobile-fullscreen mode renders full width with a header back button.
+- `src/components/sidebar/NotesList.tsx` — Search filtering, pull-to-refresh, and the note list with pin indicators. Owns the folder-toggle button that opens `FolderSidebar` (as an overlay on tablet, full-screen on mobile).
+- `src/components/sidebar/ResizeHandle.tsx` — Thin draggable divider between panes; reports `deltaX` via `onResize` as the user drags.
 
 ### Responsive Design
 
-Three-tier layout using Tailwind CSS v4 defaults — no custom breakpoints:
+Three-pane (Folder Sidebar | Notes List | Editor) layout driven by JS viewport-tier state (`viewportTier` in `page.tsx`), not pure CSS breakpoints — panes are independently resizable and their widths persist to `localStorage`:
 
-| Tier    | Prefix | Width     | Layout                                      |
-|---------|--------|-----------|---------------------------------------------|
-| Phone   | —      | < 768px   | Stacked: sidebar OR editor, one at a time   |
-| Tablet  | `md:`  | 768–1023px | Side-by-side; sidebar `w-56`               |
-| Desktop | `lg:`  | 1024px+   | Side-by-side; sidebar `w-80`                |
+| Tier    | Width      | Layout                                                                 |
+|---------|------------|-------------------------------------------------------------------------|
+| Mobile  | < 768px    | Three-level stack: Notes List (root) → Folders (full-screen) → Editor  |
+| Tablet  | 768–1023px | Two-pane (Notes List + Editor); Folder Sidebar auto-collapses to an overlay opened via toggle |
+| Desktop | 1024px+    | Three-pane, all resizable; Folder Sidebar can be manually collapsed    |
 
-No centralized theme or CSS variables — colors are inline Tailwind classes. ProseMirror/Tiptap styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the full design rationale and trade-offs.
+See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. No centralized theme or CSS variables — colors are inline Tailwind classes. ProseMirror/Tiptap styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
 
 ### Sanitizer (`src/lib/sanitizer/`)
 

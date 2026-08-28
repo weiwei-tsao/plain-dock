@@ -464,7 +464,7 @@ export default function MainPage() {
         onResize={(dx) => setNotesWidth((w) => clamp(w + dx, NOTES_WIDTH_MIN, NOTES_WIDTH_MAX))}
       />
 
-      <main className="flex min-w-[420px] flex-1 flex-col overflow-hidden bg-zinc-900/30">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-900/30">
         <EditorArea {...editorAreaProps} />
       </main>
     </div>
