@@ -256,7 +256,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       StarterKit,
       Underline,
       Image.configure({ allowBase64: true }),
-      Table.configure({ resizable: false }),
+      Table.configure({ resizable: false, renderWrapper: true }),
       TableRow,
       TableHeader,
       TableCell,

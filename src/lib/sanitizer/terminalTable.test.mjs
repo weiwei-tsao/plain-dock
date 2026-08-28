@@ -78,3 +78,17 @@ test('returns none for empty input', () => {
   assert.deepEqual(detectTerminalTable(''), { type: 'none' });
   assert.deepEqual(detectTerminalTable('   \n  \n'), { type: 'none' });
 });
+
+test('generated markdown renders as a real table', async () => {
+  const { markdownToHtml } = await import('./markdown.ts');
+  const input = [
+    '┌──────┬──────────┐',
+    '│ Repo │ Status   │',
+    '├──────┼──────────┤',
+    '│ api  │ clean    │',
+    '└──────┴──────────┘',
+  ].join('\n');
+  const result = detectTerminalTable(input);
+  assert.equal(result.type, 'table');
+  assert.match(markdownToHtml(result.markdown), /<table>/);
+});

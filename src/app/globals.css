@@ -95,6 +95,9 @@ body {
   color: #a1a1aa;
   font-style: italic;
 }
+.ProseMirror hr {
+  border-color: #27272a;
+}
 .ProseMirror img {
   max-width: 100%;
   height: auto;
