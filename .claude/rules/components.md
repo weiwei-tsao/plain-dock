@@ -4,7 +4,7 @@
 
 - Components live in `src/components/{feature}/` grouped by feature area:
   - `editor/` — EditorCanvas, RichToolbar
-  - `sidebar/` — Sidebar
+  - `sidebar/` — FolderSidebar, NotesList, ResizeHandle
 - If a UI primitive is used within a single feature, keep it in that feature's file (e.g. `ToolbarButton`, `Divider` in `RichToolbar.tsx`).
 - If a primitive is reused across 2+ feature folders, promote it to `src/components/ui/`.
 

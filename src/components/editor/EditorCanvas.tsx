@@ -472,7 +472,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       {/* Editor Header */}
       <header className="sticky top-0 z-10 border-b border-zinc-800 bg-black/50 backdrop-blur-md">
         {/* Top row: back button (phone) + title + desktop controls */}
-        <div className="flex items-center gap-2 px-4 py-3 md:px-6 md:py-4">
+        <div className="flex items-center gap-2 overflow-x-auto px-4 py-3 md:px-6 md:py-4">
           <button
             onClick={() => onBack?.()}
             className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white md:hidden"
@@ -802,7 +802,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
       {/* Editor Body */}
       <div
-        className={`flex-1 overflow-auto p-6 transition-colors md:px-20 lg:px-40 ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}
+        className={`flex-1 overflow-auto p-6 transition-colors md:px-10 lg:px-20 ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}
       >
         {note.mode === NoteMode.RICH ? (
           <EditorContent editor={editor} className="h-full" />
