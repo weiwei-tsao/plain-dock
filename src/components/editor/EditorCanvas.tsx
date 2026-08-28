@@ -8,6 +8,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -208,6 +209,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
+  // Header row scrolls horizontally (overflow-x-auto) on narrow panes, which forces
+  // overflow-y to clip too — so these dropdowns are portaled to <body> and positioned
+  // from the trigger's rect instead of relying on absolute + a relative ancestor.
+  const [overflowMenuPos, setOverflowMenuPos] = useState<{ top: number; right: number } | null>(
+    null,
+  );
+  const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [exportMenuPos, setExportMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
@@ -524,11 +533,17 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             {/* Overflow menu */}
             <div className="relative">
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
                   setShowOverflowMenu((v) => {
                     if (v) {
                       setShowExportMenu(false);
                       setShowMoveMenu(false);
+                    } else {
+                      setOverflowMenuPos({
+                        top: rect.bottom + 4,
+                        right: window.innerWidth - rect.right,
+                      });
                     }
                     return !v;
                   });
@@ -538,114 +553,120 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                 <MoreHorizontal className="h-4 w-4" />
               </button>
 
-              {showOverflowMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => {
-                      setShowOverflowMenu(false);
-                      setShowExportMenu(false);
-                      setShowMoveMenu(false);
-                    }}
-                  />
-                  <div className="absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
-                    <button
+              {showOverflowMenu &&
+                overflowMenuPos &&
+                createPortal(
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
                       onClick={() => {
-                        copyToClipboard();
-                        setShowExportMenu(false);
                         setShowOverflowMenu(false);
+                        setShowExportMenu(false);
+                        setShowMoveMenu(false);
                       }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    />
+                    <div
+                      className="fixed z-50 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
+                      style={{ top: overflowMenuPos.top, right: overflowMenuPos.right }}
                     >
-                      <Copy className="h-4 w-4" />
-                      Copy
-                    </button>
-                    <button
-                      onClick={() => setShowMoveMenu((v) => !v)}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                    >
-                      <FolderIcon className="h-4 w-4" />
-                      Move to
-                    </button>
-                    {showMoveMenu && (
-                      <div className="max-h-48 overflow-y-auto border-y border-zinc-800 bg-black/20 py-1">
-                        <button
-                          onClick={() => handleMoveToFolder(null)}
-                          className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
-                            note.folderId === null
-                              ? 'text-indigo-400'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          All Notes
-                        </button>
-                        {folders.map((folder) => (
+                      <button
+                        onClick={() => {
+                          copyToClipboard();
+                          setShowExportMenu(false);
+                          setShowOverflowMenu(false);
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </button>
+                      <button
+                        onClick={() => setShowMoveMenu((v) => !v)}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                      >
+                        <FolderIcon className="h-4 w-4" />
+                        Move to
+                      </button>
+                      {showMoveMenu && (
+                        <div className="max-h-48 overflow-y-auto border-y border-zinc-800 bg-black/20 py-1">
                           <button
-                            key={folder.id}
-                            onClick={() => handleMoveToFolder(folder.id)}
+                            onClick={() => handleMoveToFolder(null)}
                             className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
-                              note.folderId === folder.id
+                              note.folderId === null
                                 ? 'text-indigo-400'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
-                            <span className="truncate">{folder.name}</span>
+                            All Notes
                           </button>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      onClick={() => setShowExportMenu((v) => !v)}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export
-                    </button>
-                    {showExportMenu && (
-                      <div className="border-y border-zinc-800 bg-black/20 py-1">
-                        <button
-                          onClick={() => {
-                            handleExportTxt();
-                            setShowExportMenu(false);
-                            setShowOverflowMenu(false);
-                          }}
-                          className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                        >
-                          <span>Text</span>
-                          <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                            TXT
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExportMd();
-                            setShowExportMenu(false);
-                            setShowOverflowMenu(false);
-                          }}
-                          className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                        >
-                          <span>Markdown</span>
-                          <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                            MD
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                    <div className="my-1 border-t border-zinc-800" />
-                    <button
-                      onClick={() => {
-                        setShowDeleteConfirm(true);
-                        setShowExportMenu(false);
-                        setShowOverflowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-400/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete
-                    </button>
-                  </div>
-                </>
-              )}
+                          {folders.map((folder) => (
+                            <button
+                              key={folder.id}
+                              onClick={() => handleMoveToFolder(folder.id)}
+                              className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
+                                note.folderId === folder.id
+                                  ? 'text-indigo-400'
+                                  : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              <span className="truncate">{folder.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setShowExportMenu((v) => !v)}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                      >
+                        <Download className="h-4 w-4" />
+                        Export
+                      </button>
+                      {showExportMenu && (
+                        <div className="border-y border-zinc-800 bg-black/20 py-1">
+                          <button
+                            onClick={() => {
+                              handleExportTxt();
+                              setShowExportMenu(false);
+                              setShowOverflowMenu(false);
+                            }}
+                            className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                          >
+                            <span>Text</span>
+                            <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                              TXT
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleExportMd();
+                              setShowExportMenu(false);
+                              setShowOverflowMenu(false);
+                            }}
+                            className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                          >
+                            <span>Markdown</span>
+                            <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                              MD
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                      <div className="my-1 border-t border-zinc-800" />
+                      <button
+                        onClick={() => {
+                          setShowDeleteConfirm(true);
+                          setShowExportMenu(false);
+                          setShowOverflowMenu(false);
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-400/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </>,
+                  document.body,
+                )}
             </div>
           </div>
 
@@ -672,9 +693,18 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
             <div className="relative">
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
                   setShowExportMenu(false);
-                  setShowMoveMenu((v) => !v);
+                  setShowMoveMenu((v) => {
+                    if (!v) {
+                      setMoveMenuPos({
+                        top: rect.bottom + 4,
+                        right: window.innerWidth - rect.right,
+                      });
+                    }
+                    return !v;
+                  });
                 }}
                 className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
                 title="Move to folder"
@@ -682,36 +712,42 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                 <FolderIcon className="h-4 w-4" />
               </button>
 
-              {showMoveMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
-                  <div className="absolute top-full right-0 z-50 mt-1 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
-                    <button
-                      onClick={() => handleMoveToFolder(null)}
-                      className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
-                        note.folderId === null
-                          ? 'text-indigo-400'
-                          : 'text-zinc-400 hover:text-white'
-                      }`}
+              {showMoveMenu &&
+                moveMenuPos &&
+                createPortal(
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
+                    <div
+                      className="fixed z-50 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
+                      style={{ top: moveMenuPos.top, right: moveMenuPos.right }}
                     >
-                      All Notes
-                    </button>
-                    {folders.map((folder) => (
                       <button
-                        key={folder.id}
-                        onClick={() => handleMoveToFolder(folder.id)}
+                        onClick={() => handleMoveToFolder(null)}
                         className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
-                          note.folderId === folder.id
+                          note.folderId === null
                             ? 'text-indigo-400'
                             : 'text-zinc-400 hover:text-white'
                         }`}
                       >
-                        <span className="truncate">{folder.name}</span>
+                        All Notes
                       </button>
-                    ))}
-                  </div>
-                </>
-              )}
+                      {folders.map((folder) => (
+                        <button
+                          key={folder.id}
+                          onClick={() => handleMoveToFolder(folder.id)}
+                          className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                            note.folderId === folder.id
+                              ? 'text-indigo-400'
+                              : 'text-zinc-400 hover:text-white'
+                          }`}
+                        >
+                          <span className="truncate">{folder.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>,
+                  document.body,
+                )}
             </div>
 
             <button
@@ -743,9 +779,18 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
             <div className="relative">
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
                   setShowMoveMenu(false);
-                  setShowExportMenu((v) => !v);
+                  setShowExportMenu((v) => {
+                    if (!v) {
+                      setExportMenuPos({
+                        top: rect.bottom + 4,
+                        right: window.innerWidth - rect.right,
+                      });
+                    }
+                    return !v;
+                  });
                 }}
                 className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
                 title="Export"
@@ -753,37 +798,43 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                 <Download className="h-4 w-4" />
               </button>
 
-              {showExportMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-                  <div className="absolute top-full right-0 z-50 mt-1 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl">
-                    <button
-                      onClick={() => {
-                        handleExportTxt();
-                        setShowExportMenu(false);
-                      }}
-                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              {showExportMenu &&
+                exportMenuPos &&
+                createPortal(
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                    <div
+                      className="fixed z-50 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
+                      style={{ top: exportMenuPos.top, right: exportMenuPos.right }}
                     >
-                      <span>Text</span>
-                      <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                        TXT
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleExportMd();
-                        setShowExportMenu(false);
-                      }}
-                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                    >
-                      <span>Markdown</span>
-                      <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                        MD
-                      </span>
-                    </button>
-                  </div>
-                </>
-              )}
+                      <button
+                        onClick={() => {
+                          handleExportTxt();
+                          setShowExportMenu(false);
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                      >
+                        <span>Text</span>
+                        <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                          TXT
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleExportMd();
+                          setShowExportMenu(false);
+                        }}
+                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                      >
+                        <span>Markdown</span>
+                        <span className="rounded-sm border border-current px-1 text-[9px] font-black">
+                          MD
+                        </span>
+                      </button>
+                    </div>
+                  </>,
+                  document.body,
+                )}
             </div>
 
             <button
