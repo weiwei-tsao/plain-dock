@@ -802,7 +802,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
       {/* Editor Body */}
       <div
-        className={`flex-1 overflow-auto p-6 transition-colors md:px-20 lg:px-40 ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}
+        className={`flex-1 overflow-auto p-6 transition-colors md:px-10 lg:px-20 ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}
       >
         {note.mode === NoteMode.RICH ? (
           <EditorContent editor={editor} className="h-full" />
