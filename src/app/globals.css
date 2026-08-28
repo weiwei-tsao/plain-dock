@@ -106,3 +106,26 @@ body {
   outline: 2px solid #6366f1;
   outline-offset: 2px;
 }
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.ProseMirror table {
+  border-collapse: collapse;
+  border: 1px solid #27272a;
+}
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid #27272a;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.ProseMirror th {
+  background: #18181b;
+  color: #fff;
+  font-weight: bold;
+}
+.ProseMirror td {
+  color: #d1d1d1;
+}

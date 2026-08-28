@@ -13,6 +13,10 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
@@ -230,7 +234,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const currentModeRef = useRef(note.mode);
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline, Image.configure({ allowBase64: true })],
+    extensions: [
+      StarterKit,
+      Underline,
+      Image.configure({ allowBase64: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+    ],
     content: note.content,
     editorProps: {
       attributes: {
