@@ -435,7 +435,14 @@ export default function MainPage() {
           </div>
           <ResizeHandle
             onResize={(dx) =>
-              setFolderWidth((w) => clamp(w + dx, FOLDER_WIDTH_MIN, FOLDER_WIDTH_MAX))
+              setFolderWidth((w) => {
+                const next = w + dx;
+                if (next < FOLDER_WIDTH_MIN) {
+                  setFolderCollapsed(true);
+                  return w;
+                }
+                return clamp(next, FOLDER_WIDTH_MIN, FOLDER_WIDTH_MAX);
+              })
             }
           />
         </>
