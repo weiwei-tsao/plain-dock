@@ -103,9 +103,16 @@ Registered in `EditorCanvas.tsx`'s `useEditor` extensions array alongside
 `StarterKit`. `Table` configured non-resizable (`resizable: false` —
 resizing wasn't requested; skip it, add if asked).
 
-Tiptap's table NodeView wraps the rendered `<table>` in
-`<div class="tableWrapper">` automatically (confirmed against v2.x
-behavior). `globals.css` gets a matching block: `.tableWrapper` scrolls
+**Correction (found during final review, not during design):** `@tiptap/extension-table`
+does NOT wrap the rendered `<table>` in `<div class="tableWrapper">` by
+default. That wrapper only appears when `renderWrapper: true` is passed
+explicitly, or as a side effect of `resizable: true` enabling column
+resizing — verified against `node_modules/@tiptap/extension-table`'s
+actual source for `2.27.2`, contradicting what this section originally
+claimed. `Table.configure({ resizable: false, renderWrapper: true })` is
+required to make the `.tableWrapper` CSS below apply to anything.
+
+`globals.css` gets a matching block: `.tableWrapper` scrolls
 horizontally (`overflow-x: auto`), `table` uses `border-collapse: collapse`
 with **no** `table-layout: fixed` and **no** forced `width: 100%` — columns
 stay content-sized (`table-layout: auto`, the default) so a table with
