@@ -18,6 +18,12 @@ export const ALLOWED_TAGS = [
   'h6',
   'a',
   'span',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
 ];
 
 export const ALLOWED_STYLES = ['color', 'background-color', 'text-decoration'];
