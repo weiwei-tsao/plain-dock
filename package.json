@@ -13,6 +13,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "docker:sync-from-turso": "node scripts/sync-turso-to-docker.mjs",
     "test:sync": "node --test scripts/sync-turso-to-docker.test.mjs",
+    "test:sanitizer": "node --test src/lib/sanitizer/terminalTable.test.mjs",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
     "remotedev": "next dev --turbopack -p 3000 --hostname 0.0.0.0"
