@@ -114,7 +114,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
             <div key={folder.id} className="group relative">
               <button
                 onClick={() => onSelectFolder(folder.id)}
-                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-14 text-sm transition-colors md:pr-2 ${
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-14 text-sm transition-colors ${
                   activeFolderId === folder.id
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-400 hover:bg-zinc-900'
@@ -122,11 +122,8 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
               >
                 <FolderIcon className="h-4 w-4 shrink-0 text-zinc-500" />
                 <span className="min-w-0 flex-1 truncate text-left">{folder.name}</span>
-                <span className="hidden text-[10px] text-zinc-600 md:inline md:group-hover:hidden">
-                  {notes.filter((n) => n.folderId === folder.id).length}
-                </span>
               </button>
-              <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 md:hidden md:group-hover:flex">
+              <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
                 <button
                   onClick={() => {
                     setEditingFolderId(folder.id);
