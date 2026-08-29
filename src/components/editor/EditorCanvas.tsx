@@ -17,6 +17,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import Link from '@tiptap/extension-link';
 import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
@@ -119,8 +120,6 @@ function applyMarks(text: string, marks: TiptapMark[] = []): string {
   for (const [type, wrap] of wrappers) {
     if (marks.some((m) => m.type === type)) result = wrap(result);
   }
-  // No Link extension is registered on this editor (see useEditor below), so no text
-  // node can carry a 'link' mark today — this branch is inert until one is added.
   const link = marks.find((m) => m.type === 'link');
   const href = link?.attrs?.href;
   if (typeof href === 'string') {
@@ -260,6 +259,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       TableRow,
       TableHeader,
       TableCell,
+      Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'] }),
     ],
     content: note.content,
     editorProps: {

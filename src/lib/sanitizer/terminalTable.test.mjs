@@ -23,6 +23,26 @@ test('detects a Unicode box-drawing table', () => {
   );
 });
 
+test('detects a double-line Unicode box-drawing table', () => {
+  const input = [
+    '╔══════════════╦══════════╗',
+    '║ Repo         ║ Status   ║',
+    '╠══════════════╬══════════╣',
+    '║ pub-api      ║ clean    ║',
+    '║ pub-web      ║ dirty    ║',
+    '╚══════════════╩══════════╝',
+  ].join('\n');
+
+  const result = detectTerminalTable(input);
+  assert.equal(result.type, 'table');
+  assert.equal(
+    result.markdown,
+    ['| Repo | Status |', '| --- | --- |', '| pub-api | clean |', '| pub-web | dirty |'].join(
+      '\n',
+    ),
+  );
+});
+
 test('detects an ASCII grid table', () => {
   const input = [
     '+------+--------+',

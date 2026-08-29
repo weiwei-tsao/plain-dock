@@ -3,8 +3,9 @@ export type TerminalTableResult =
   | { type: 'code' }
   | { type: 'none' };
 
-const BOX_CHARS = '┌┬┐├┼┤└┴┘│─╭╮╰╯╔╗╚╝╠╣╦╩║═';
+const BOX_CHARS = '┌┬┐├┼┤└┴┘│─╭╮╰╯╔╗╚╝╠╣╦╩║═╬';
 const BOX_CHAR_SET = new Set(BOX_CHARS.split(''));
+const BOX_CONTENT_DELIMITERS = ['│', '║'] as const;
 
 function isBoxBorderLine(line: string): boolean {
   const trimmed = line.trim();
@@ -12,9 +13,16 @@ function isBoxBorderLine(line: string): boolean {
   return Array.from(trimmed).every((ch) => BOX_CHAR_SET.has(ch));
 }
 
-function isBoxContentLine(line: string): boolean {
+function boxContentDelimiter(line: string): string | null {
   const trimmed = line.trim();
-  return trimmed.length >= 2 && trimmed.startsWith('│') && trimmed.endsWith('│');
+  if (trimmed.length < 2) return null;
+  return (
+    BOX_CONTENT_DELIMITERS.find((ch) => trimmed.startsWith(ch) && trimmed.endsWith(ch)) ?? null
+  );
+}
+
+function isBoxContentLine(line: string): boolean {
+  return boxContentDelimiter(line) !== null;
 }
 
 function isAsciiBorderLine(line: string): boolean {
@@ -26,7 +34,7 @@ function isAsciiContentLine(line: string): boolean {
   return trimmed.length >= 2 && trimmed.startsWith('|') && trimmed.endsWith('|');
 }
 
-function splitCells(line: string, delimiter: '│' | '|'): string[] {
+function splitCells(line: string, delimiter: string): string[] {
   const trimmed = line.trim();
   const inner = trimmed.slice(1, -1);
   return inner.split(delimiter).map((cell) => cell.trim());
@@ -66,10 +74,10 @@ export function detectTerminalTable(text: string): TerminalTableResult {
   if (borderCount === 0 || total / nonBlankLines.length < 0.5) return { type: 'none' };
   if (contentCount < 2) return { type: 'code' };
 
-  const delimiter = useBox ? '│' : '|';
   const contentLines = nonBlankLines.filter((l) =>
     useBox ? isBoxContentLine(l) : isAsciiContentLine(l),
   );
+  const delimiter = useBox ? (boxContentDelimiter(contentLines[0]) ?? '│') : '|';
   const rows = contentLines.map((line) => splitCells(line, delimiter));
   const colCount = rows[0].length;
   const consistent = colCount >= 2 && rows.every((row) => row.length === colCount);
