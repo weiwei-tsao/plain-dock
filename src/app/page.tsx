@@ -194,10 +194,26 @@ export default function MainPage() {
   const loadNotes = useCallback(async () => {
     const data = await noteApi.list();
     setNotes(data);
+    return data;
   }, []);
 
+  const activeFolderIdRef = useRef(activeFolderId);
+  activeFolderIdRef.current = activeFolderId;
+
   useEffect(() => {
-    loadNotes();
+    let cancelled = false;
+    loadNotes().then((data) => {
+      if (cancelled) return;
+      setActiveNoteId((prev) => {
+        if (prev) return prev;
+        const folderId = activeFolderIdRef.current;
+        const scoped = folderId ? data.filter((n) => n.folderId === folderId) : data;
+        return scoped.length > 0 ? scoped[0].id : prev;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadNotes]);
 
   const loadFolders = useCallback(async () => {
