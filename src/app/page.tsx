@@ -200,16 +200,18 @@ export default function MainPage() {
   const activeFolderIdRef = useRef(activeFolderId);
   activeFolderIdRef.current = activeFolderId;
 
+  const activeNoteIdRef = useRef(activeNoteId);
+  activeNoteIdRef.current = activeNoteId;
+
   useEffect(() => {
     let cancelled = false;
     loadNotes().then((data) => {
-      if (cancelled) return;
-      setActiveNoteId((prev) => {
-        if (prev) return prev;
-        const folderId = activeFolderIdRef.current;
-        const scoped = folderId ? data.filter((n) => n.folderId === folderId) : data;
-        return scoped.length > 0 ? scoped[0].id : prev;
-      });
+      if (cancelled || activeNoteIdRef.current) return;
+      const folderId = activeFolderIdRef.current;
+      const scoped = folderId ? data.filter((n) => n.folderId === folderId) : data;
+      if (scoped.length === 0) return;
+      setActiveNoteId(scoped[0].id);
+      setMobilePanel('editor');
     });
     return () => {
       cancelled = true;
@@ -285,6 +287,21 @@ export default function MainPage() {
     setActiveNoteStatus('idle');
     setMobilePanel('list');
   }, [cleanupEmptyNote]);
+
+  const prevFolderIdRef = useRef(activeFolderId);
+  useEffect(() => {
+    if (prevFolderIdRef.current === activeFolderId) return;
+    prevFolderIdRef.current = activeFolderId;
+
+    const scoped = activeFolderId ? notes.filter((n) => n.folderId === activeFolderId) : notes;
+    if (activeNoteId && scoped.some((n) => n.id === activeNoteId)) return;
+
+    cleanupEmptyNote();
+    setActiveNote(null);
+    setActiveNoteStatus(scoped.length > 0 ? 'loading' : 'idle');
+    setActiveNoteId(scoped.length > 0 ? scoped[0].id : null);
+    setMobilePanel(scoped.length > 0 ? 'editor' : 'list');
+  }, [activeFolderId, notes, activeNoteId, cleanupEmptyNote]);
 
   const handleCreateNote = useCallback(async () => {
     await cleanupEmptyNote();
