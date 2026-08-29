@@ -61,6 +61,45 @@ body {
   border-radius: 0;
   color: inherit;
 }
+.ProseMirror pre code .hljs-keyword {
+  color: #818cf8;
+}
+.ProseMirror pre code .hljs-string {
+  color: #fbbf24;
+}
+.ProseMirror pre code .hljs-number,
+.ProseMirror pre code .hljs-literal {
+  color: #fb923c;
+}
+.ProseMirror pre code .hljs-title,
+.ProseMirror pre code .hljs-title.function_ {
+  color: #a78bfa;
+}
+.ProseMirror pre code .hljs-built_in,
+.ProseMirror pre code .hljs-type,
+.ProseMirror pre code .hljs-title.class_ {
+  color: #22d3ee;
+}
+.ProseMirror pre code .hljs-tag {
+  color: #4ade80;
+}
+.ProseMirror pre code .hljs-attr,
+.ProseMirror pre code .hljs-attribute {
+  color: #93c5fd;
+}
+.ProseMirror pre code .hljs-comment {
+  color: #71717a;
+  font-style: italic;
+}
+.ProseMirror pre code .hljs-regexp {
+  color: #f472b6;
+}
+.ProseMirror pre code .hljs-deletion {
+  color: #f87171;
+}
+.ProseMirror pre code .hljs-addition {
+  color: #4ade80;
+}
 .ProseMirror h1 {
   font-size: 1.875rem;
   font-weight: bold;
