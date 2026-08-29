@@ -18,6 +18,8 @@ import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import Link from '@tiptap/extension-link';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { createLowlight, common } from 'lowlight';
 import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
@@ -170,6 +172,8 @@ function nodeToMarkdown(node: TiptapNode): string {
   }
 }
 
+const lowlight = createLowlight(common);
+
 function sanitizeFilename(title: string): string {
   const cleaned = title.trim().replace(/[\\/:*?"<>|]/g, '-');
   return cleaned || 'untitled';
@@ -252,7 +256,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ codeBlock: false }),
+      CodeBlockLowlight.configure({ lowlight }),
       Underline,
       Image.configure({ allowBase64: true }),
       Table.configure({ resizable: false, renderWrapper: true }),
