@@ -1,15 +1,22 @@
 /**
  * PlainDock Sanitization Engine
- * Implementation based on PRD v1.7 Section 2.2.A
+ * Implementation based on PRD v1.7 Section 2.2.A, with one deliberate
+ * deviation: tables are no longer downgraded to text — see
+ * docs/superpowers/specs/2026-08-28-smart-paste-design.md.
  *
  * 3-layer pipeline:
  *   1. Security defense (strip dangerous elements)
  *   2. Consistency normalization (semantic tag alignment)
- *   3. Structure downgrade (tables, media → text)
+ *   3. Structure downgrade (media → text; tables now pass through as an
+ *      allowed structure instead)
  */
 
 import { ALLOWED_TAGS, ALLOWED_STYLES, DANGEROUS_TAGS } from './config';
 import { TAG_NORMALIZE_MAP } from './normalize';
+
+export { markdownToHtml } from './markdown';
+export { detectTerminalTable } from './terminalTable';
+export type { TerminalTableResult } from './terminalTable';
 
 export function sanitizeHTML(rawHTML: string): string {
   if (!rawHTML || rawHTML.trim() === '') return '';
@@ -40,20 +47,6 @@ export function sanitizeHTML(rawHTML: string): string {
     if (last?.nodeType === Node.TEXT_NODE && last.textContent !== null) {
       last.textContent = last.textContent.replace(/\n$/, '');
     }
-  });
-
-  // Layer 3: Structure Downgrade — Tables
-  doc.querySelectorAll('table').forEach((table) => {
-    const rows = Array.from(table.querySelectorAll('tr'));
-    rows.forEach((tr) => {
-      const p = doc.createElement('p');
-      const cells = Array.from(tr.querySelectorAll('td, th')).map(
-        (cell) => cell.textContent?.trim() || '',
-      );
-      p.textContent = cells.join('\t');
-      tr.replaceWith(p);
-    });
-    table.replaceWith(...Array.from(table.childNodes));
   });
 
   // Layer 3: Structure Downgrade — Media
@@ -131,6 +124,46 @@ export function sanitizeHTML(rawHTML: string): string {
   const container = doc.createElement('div');
   container.appendChild(finalFragment);
   return container.innerHTML;
+}
+
+// Paste-only normalization — NOT part of sanitizeHTML's contract. Collapses
+// runs of empty paragraphs (from per-line HTML sources like VS Code/terminal
+// clipboard exports) down to at most one, and drops a lone leading/trailing
+// empty paragraph entirely. A single empty paragraph *between* content is
+// left alone — it may be intentional spacing.
+export function collapseEmptyParagraphs(html: string): string {
+  if (!html || html.trim() === '') return html;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  const isEmptyParagraph = (el: Element): boolean =>
+    el.tagName.toLowerCase() === 'p' &&
+    (el.textContent ?? '').trim() === '' &&
+    Array.from(el.childNodes).every(
+      (child) => child.nodeName.toLowerCase() === 'br' || child.nodeType === Node.TEXT_NODE,
+    );
+
+  let previousWasEmpty = false;
+  for (const el of Array.from(doc.body.children)) {
+    const isEmpty = isEmptyParagraph(el);
+    if (isEmpty && previousWasEmpty) {
+      el.remove();
+      continue;
+    }
+    previousWasEmpty = isEmpty;
+  }
+
+  const remaining = Array.from(doc.body.children);
+  if (remaining.length > 0 && isEmptyParagraph(remaining[0])) {
+    remaining[0].remove();
+  }
+  const afterLeading = Array.from(doc.body.children);
+  if (afterLeading.length > 0 && isEmptyParagraph(afterLeading[afterLeading.length - 1])) {
+    afterLeading[afterLeading.length - 1].remove();
+  }
+
+  return doc.body.innerHTML;
 }
 
 function escapeHTML(str: string): string {

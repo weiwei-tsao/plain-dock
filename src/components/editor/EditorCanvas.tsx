@@ -13,10 +13,22 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import Link from '@tiptap/extension-link';
 import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
-import { sanitizeHTML, wrapPlainText, getNoteTextContent } from '@/lib/sanitizer';
+import {
+  sanitizeHTML,
+  collapseEmptyParagraphs,
+  markdownToHtml,
+  detectTerminalTable,
+  wrapPlainText,
+  getNoteTextContent,
+} from '@/lib/sanitizer';
 import RichToolbar from './RichToolbar';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
@@ -62,6 +74,17 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
   });
 }
 
+function textToCleanHtml(text: string): string {
+  const detection = detectTerminalTable(text);
+  const markdownSource =
+    detection.type === 'table'
+      ? detection.markdown
+      : detection.type === 'code'
+        ? '```text\n' + text + '\n```'
+        : text;
+  return sanitizeHTML(markdownToHtml(markdownSource));
+}
+
 type TiptapMark = { type: string; attrs?: Record<string, unknown> };
 
 type TiptapNode = {
@@ -97,8 +120,6 @@ function applyMarks(text: string, marks: TiptapMark[] = []): string {
   for (const [type, wrap] of wrappers) {
     if (marks.some((m) => m.type === type)) result = wrap(result);
   }
-  // No Link extension is registered on this editor (see useEditor below), so no text
-  // node can carry a 'link' mark today — this branch is inert until one is added.
   const link = marks.find((m) => m.type === 'link');
   const href = link?.attrs?.href;
   if (typeof href === 'string') {
@@ -230,7 +251,16 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const currentModeRef = useRef(note.mode);
 
   const editor = useEditor({
-    extensions: [StarterKit, Underline, Image.configure({ allowBase64: true })],
+    extensions: [
+      StarterKit,
+      Underline,
+      Image.configure({ allowBase64: true }),
+      Table.configure({ resizable: false, renderWrapper: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'] }),
+    ],
     content: note.content,
     editorProps: {
       attributes: {
@@ -269,12 +299,24 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         const text = event.clipboardData?.getData('text/plain');
 
         if (html && html.trim() !== '') {
-          const clean = sanitizeHTML(html);
-          editor.commands.insertContent(clean);
+          // HTML is normally the richer representation (links, inline marks,
+          // structure) and wins by default — UNLESS it has no real table of
+          // its own while the plain-text entry resolves to one. That case
+          // means the source's HTML was a lossy per-line dump (common from
+          // VS Code/terminal HTML clipboard exports) while text/plain still
+          // carries a parseable terminal/Markdown table — prefer the table.
+          const htmlHasTable = /<table[\s>]/i.test(html);
+          let clean = sanitizeHTML(html);
+
+          if (!htmlHasTable && text) {
+            const fromText = textToCleanHtml(text);
+            if (/<table[\s>]/i.test(fromText)) clean = fromText;
+          }
+
+          editor.commands.insertContent(collapseEmptyParagraphs(clean));
           return true;
         } else if (text) {
-          const clean = wrapPlainText(text);
-          editor.commands.insertContent(clean);
+          editor.commands.insertContent(collapseEmptyParagraphs(textToCleanHtml(text)));
           return true;
         }
         return false;
