@@ -377,7 +377,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         try {
           const updated = await noteApi.update(note.id, payload);
           onUpdate(updated);
-          setLocalTitle(updated.title);
+          // Only adopt the server's title if nothing newer has been typed since this
+          // request was sent — otherwise a slow round-trip clobbers in-progress typing
+          // (most visible with IME composition, e.g. Chinese input).
+          setLocalTitle((current) =>
+            payload.title !== undefined && current === payload.title ? updated.title : current,
+          );
 
           if (showProgressAndSuccess) {
             setSaveState('SAVED');
