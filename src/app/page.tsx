@@ -24,6 +24,7 @@ import FolderSidebar from '@/components/sidebar/FolderSidebar';
 import NotesList from '@/components/sidebar/NotesList';
 import ResizeHandle from '@/components/sidebar/ResizeHandle';
 import EditorCanvas, { type EditorCanvasHandle } from '@/components/editor/EditorCanvas';
+import PlainDockIcon from '@/components/ui/PlainDockIcon';
 
 type ActiveNoteStatus = 'idle' | 'loading' | 'ready' | 'error';
 type ViewportTier = 'mobile' | 'tablet' | 'desktop';
@@ -456,57 +457,64 @@ export default function MainPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-black font-sans text-zinc-100">
-      {viewportTier === 'desktop' && !folderCollapsed && (
-        <>
-          <div style={{ width: folderWidth }} className="h-full shrink-0">
-            <FolderSidebar
-              {...folderSidebarProps}
-              onSelectFolder={setActiveFolderId}
-              variant="pane"
-            />
-          </div>
-          <ResizeHandle
-            onResize={(dx) =>
-              setFolderWidth((w) => {
-                const next = w + dx;
-                if (next < FOLDER_WIDTH_MIN) {
-                  setFolderCollapsed(true);
-                  return w;
-                }
-                return clamp(next, FOLDER_WIDTH_MIN, FOLDER_WIDTH_MAX);
-              })
-            }
-          />
-        </>
-      )}
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-black font-sans text-zinc-100">
+      <div className="flex shrink-0 items-center gap-2 border-b border-zinc-800 p-4">
+        <PlainDockIcon className="h-5 w-5 shrink-0 text-indigo-400" />
+        <span className="truncate font-semibold">PlainDock</span>
+      </div>
 
-      <div style={{ width: notesWidth }} className="relative h-full shrink-0">
-        <NotesList {...notesListProps} />
-        {viewportTier === 'tablet' && folderOverlayOpen && (
+      <div className="flex flex-1 overflow-hidden">
+        {viewportTier === 'desktop' && !folderCollapsed && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setFolderOverlayOpen(false)} />
-            <div
-              style={{ width: folderWidth }}
-              className="absolute top-0 left-0 z-50 h-full border-r border-zinc-800 bg-black shadow-2xl"
-            >
+            <div style={{ width: folderWidth }} className="h-full shrink-0">
               <FolderSidebar
                 {...folderSidebarProps}
-                onSelectFolder={handleSelectFolderOverlay}
+                onSelectFolder={setActiveFolderId}
                 variant="pane"
               />
             </div>
+            <ResizeHandle
+              onResize={(dx) =>
+                setFolderWidth((w) => {
+                  const next = w + dx;
+                  if (next < FOLDER_WIDTH_MIN) {
+                    setFolderCollapsed(true);
+                    return w;
+                  }
+                  return clamp(next, FOLDER_WIDTH_MIN, FOLDER_WIDTH_MAX);
+                })
+              }
+            />
           </>
         )}
+
+        <div style={{ width: notesWidth }} className="relative h-full shrink-0">
+          <NotesList {...notesListProps} />
+          {viewportTier === 'tablet' && folderOverlayOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setFolderOverlayOpen(false)} />
+              <div
+                style={{ width: folderWidth }}
+                className="absolute top-0 left-0 z-50 h-full border-r border-zinc-800 bg-black shadow-2xl"
+              >
+                <FolderSidebar
+                  {...folderSidebarProps}
+                  onSelectFolder={handleSelectFolderOverlay}
+                  variant="pane"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <ResizeHandle
+          onResize={(dx) => setNotesWidth((w) => clamp(w + dx, NOTES_WIDTH_MIN, NOTES_WIDTH_MAX))}
+        />
+
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-900/30">
+          <EditorArea {...editorAreaProps} />
+        </main>
       </div>
-
-      <ResizeHandle
-        onResize={(dx) => setNotesWidth((w) => clamp(w + dx, NOTES_WIDTH_MIN, NOTES_WIDTH_MAX))}
-      />
-
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-zinc-900/30">
-        <EditorArea {...editorAreaProps} />
-      </main>
     </div>
   );
 }

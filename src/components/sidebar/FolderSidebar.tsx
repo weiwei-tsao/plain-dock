@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import type { Folder, Note } from '@/types';
 import { ChevronLeft, Folder as FolderIcon, FolderPlus, Pencil, Trash2 } from 'lucide-react';
-import PlainDockIcon from '@/components/ui/PlainDockIcon';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Toast from '@/components/ui/Toast';
 
@@ -65,7 +64,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-black">
-      {variant === 'mobile-fullscreen' ? (
+      {variant === 'mobile-fullscreen' && (
         <div className="flex items-center gap-2 border-b border-zinc-800 p-4">
           <button
             onClick={() => onBack?.()}
@@ -76,11 +75,6 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
           </button>
           <span className="flex-1 text-center font-semibold">Folders</span>
           <span className="w-14 shrink-0" />
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 border-b border-zinc-800 p-4">
-          <PlainDockIcon className="h-5 w-5 shrink-0 text-indigo-400" />
-          <span className="truncate font-semibold">PlainDock</span>
         </div>
       )}
 
