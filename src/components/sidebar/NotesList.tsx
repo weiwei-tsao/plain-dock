@@ -100,6 +100,7 @@ const NotesList: React.FC<NotesListProps> = ({
           <button
             onClick={onToggleFolders}
             className="shrink-0 rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+            title="Toggle folders"
             aria-label="Toggle folders"
           >
             <PanelLeft className="h-4 w-4" />
@@ -109,6 +110,7 @@ const NotesList: React.FC<NotesListProps> = ({
         <button
           onClick={onCreateNote}
           className="shrink-0 rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          title="New note"
           aria-label="New note"
         >
           <Plus className="h-5 w-5" />

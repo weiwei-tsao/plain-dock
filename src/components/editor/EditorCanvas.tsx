@@ -563,6 +563,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2.5 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
+              title="Pin note"
+              aria-label="Pin note"
             >
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
@@ -574,6 +576,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   ? 'bg-indigo-400/10 text-indigo-400'
                   : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
               }`}
+              title="Switch Mode (Cmd+Shift+P)"
+              aria-label="Switch mode"
             >
               {note.mode === NoteMode.RICH ? (
                 <FileCode className="h-4 w-4" />
@@ -601,6 +605,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   });
                 }}
                 className="rounded-lg p-2.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                title="More options"
+                aria-label="More options"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>

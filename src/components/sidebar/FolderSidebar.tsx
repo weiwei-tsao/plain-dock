@@ -137,6 +137,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                   setMenuFolderId((v) => (v === folder.id ? null : folder.id));
                 }}
                 className="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                title={`Folder options for ${folder.name}`}
                 aria-label={`Folder options for ${folder.name}`}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
