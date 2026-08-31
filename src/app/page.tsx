@@ -48,8 +48,8 @@ function NoteLoadingState() {
       aria-live="polite"
       aria-label="Loading note"
     >
-      <div className="border-b border-zinc-800/80 px-5 py-4">
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+      <div className="border-b border-zinc-800/80 px-4 py-3 md:px-6 md:py-4">
+        <div className="flex flex-col gap-4">
           <div className="h-7 w-48 animate-pulse rounded bg-zinc-800" />
           <div className="flex gap-2">
             <div className="h-8 w-8 animate-pulse rounded bg-zinc-800/80" />
@@ -60,7 +60,7 @@ function NoteLoadingState() {
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-5 py-8">
+      <div className="flex flex-1 flex-col p-6 md:px-10 lg:px-20">
         <p className="mb-7 text-sm text-zinc-500">Loading note...</p>
         <div className="space-y-4">
           {skeletonLineWidths.map((width) => (
