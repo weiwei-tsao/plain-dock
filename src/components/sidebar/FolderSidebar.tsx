@@ -1,8 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Folder, Note } from '@/types';
-import { ChevronLeft, Folder as FolderIcon, FolderPlus, Pencil, Trash2 } from 'lucide-react';
+import {
+  ChevronLeft,
+  Folder as FolderIcon,
+  FolderPlus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Toast from '@/components/ui/Toast';
 
@@ -35,6 +43,11 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
   const [editingName, setEditingName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Folder | null>(null);
   const [errorToast, setErrorToast] = useState<string | null>(null);
+  const [menuFolderId, setMenuFolderId] = useState<string | null>(null);
+  // List area scrolls (overflow-y-auto below), which would clip an absolutely
+  // positioned dropdown near the bottom — portal to <body> and position from
+  // the trigger's rect instead, same fix as EditorCanvas's overflow menu.
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
   const submitNewFolder = async () => {
     const name = newFolderName.trim();
@@ -108,7 +121,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
             <div key={folder.id} className="group relative">
               <button
                 onClick={() => onSelectFolder(folder.id)}
-                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-14 text-sm transition-colors ${
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-9 text-sm transition-colors ${
                   activeFolderId === folder.id
                     ? 'bg-zinc-800 text-white'
                     : 'text-zinc-400 hover:bg-zinc-900'
@@ -117,28 +130,61 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                 <FolderIcon className="h-4 w-4 shrink-0 text-zinc-500" />
                 <span className="min-w-0 flex-1 truncate text-left">{folder.name}</span>
               </button>
-              <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5">
-                <button
-                  onClick={() => {
-                    setEditingFolderId(folder.id);
-                    setEditingName(folder.name);
-                  }}
-                  className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-                  aria-label={`Rename ${folder.name}`}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(folder)}
-                  className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-400/10 hover:text-red-400"
-                  aria-label={`Delete ${folder.name}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              <button
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                  setMenuFolderId((v) => (v === folder.id ? null : folder.id));
+                }}
+                className="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                aria-label={`Folder options for ${folder.name}`}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
             </div>
           ),
         )}
+
+        {menuFolderId &&
+          menuPos &&
+          (() => {
+            const folder = folders.find((f) => f.id === menuFolderId);
+            if (!folder) return null;
+            return createPortal(
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuFolderId(null)} />
+                <div
+                  className="fixed z-50 inline-flex items-center gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900 p-1 shadow-xl"
+                  style={{ top: menuPos.top, right: menuPos.right }}
+                >
+                  <button
+                    onClick={() => {
+                      setEditingFolderId(folder.id);
+                      setEditingName(folder.name);
+                      setMenuFolderId(null);
+                    }}
+                    title="Rename"
+                    aria-label="Rename"
+                    className="rounded-md p-2 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDeleteTarget(folder);
+                      setMenuFolderId(null);
+                    }}
+                    title="Delete"
+                    aria-label="Delete"
+                    className="rounded-md p-2 text-zinc-400 transition-colors hover:bg-red-400/10 hover:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </>,
+              document.body,
+            );
+          })()}
 
         {isAddingFolder ? (
           <input
