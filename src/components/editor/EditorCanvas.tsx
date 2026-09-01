@@ -454,9 +454,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     if (folderId !== note.folderId) persistChange({ folderId });
   };
 
-  const hasMeaningfulDraftContent = () =>
-    localTitle.trim() !== '' || plainContentRef.current.trim() !== '';
-
   const handleSwitchMode = () => {
     if (note.mode === NoteMode.RICH) {
       setModeConfirmHasImages(editor?.getHTML().includes('<img') ?? false);
@@ -470,7 +467,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           textContent: getNoteTextContent(richHTML),
           mode: NoteMode.RICH,
         },
-        { showProgressAndSuccess: hasMeaningfulDraftContent() },
+        { showProgressAndSuccess: false },
       );
     }
   };
@@ -482,11 +479,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     setPlainContent(plainText);
     plainContentRef.current = plainText;
     editor?.commands.setContent(plainText);
-    persistChange({
-      content: plainText,
-      textContent: plainText,
-      mode: NoteMode.PLAIN,
-    });
+    persistChange(
+      {
+        content: plainText,
+        textContent: plainText,
+        mode: NoteMode.PLAIN,
+      },
+      { showProgressAndSuccess: false },
+    );
   };
 
   const copyToClipboard = async () => {
@@ -563,6 +563,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2.5 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
+              title={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-label={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-pressed={note.isPinned}
             >
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
@@ -574,6 +577,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   ? 'bg-indigo-400/10 text-indigo-400'
                   : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
               }`}
+              title="Switch Mode (Cmd+Shift+P)"
+              aria-label="Switch mode"
             >
               {note.mode === NoteMode.RICH ? (
                 <FileCode className="h-4 w-4" />
@@ -601,6 +606,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   });
                 }}
                 className="rounded-lg p-2.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+                title="More options"
+                aria-label="More options"
               >
                 <MoreHorizontal className="h-4 w-4" />
               </button>
@@ -738,7 +745,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
-              title="Pin note"
+              title={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-label={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-pressed={note.isPinned}
             >
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
@@ -986,7 +995,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         message={
           modeConfirmHasImages
             ? 'Switching to plain text will permanently remove formatting and embedded images. Images will be replaced with placeholders. Continue?'
-            : 'Switching to plain text will permanently remove formatting and save immediately. Continue?'
+            : 'Switching to plain text will permanently remove formatting. Continue?'
         }
         variant="warning"
         confirmLabel="Switch"

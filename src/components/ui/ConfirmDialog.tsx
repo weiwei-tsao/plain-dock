@@ -114,6 +114,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       >
         <button
           onClick={onCancel}
+          title="Close"
           aria-label="Close"
           className="absolute top-3 right-3 rounded-lg p-1 text-zinc-500 transition-colors hover:text-zinc-300"
         >

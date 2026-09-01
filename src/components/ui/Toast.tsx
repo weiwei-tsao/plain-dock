@@ -54,6 +54,8 @@ const Toast: React.FC<ToastProps> = ({
         <span className="text-sm text-zinc-200">{message}</span>
         <button
           onClick={onClose}
+          title="Close"
+          aria-label="Close"
           className="p-0.5 text-zinc-500 transition-colors hover:text-zinc-300"
         >
           <X className="h-3.5 w-3.5" />
