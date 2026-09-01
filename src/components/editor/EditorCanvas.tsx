@@ -454,9 +454,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     if (folderId !== note.folderId) persistChange({ folderId });
   };
 
-  const hasMeaningfulDraftContent = () =>
-    localTitle.trim() !== '' || plainContentRef.current.trim() !== '';
-
   const handleSwitchMode = () => {
     if (note.mode === NoteMode.RICH) {
       setModeConfirmHasImages(editor?.getHTML().includes('<img') ?? false);
@@ -470,7 +467,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           textContent: getNoteTextContent(richHTML),
           mode: NoteMode.RICH,
         },
-        { showProgressAndSuccess: hasMeaningfulDraftContent() },
+        { showProgressAndSuccess: false },
       );
     }
   };
@@ -482,11 +479,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     setPlainContent(plainText);
     plainContentRef.current = plainText;
     editor?.commands.setContent(plainText);
-    persistChange({
-      content: plainText,
-      textContent: plainText,
-      mode: NoteMode.PLAIN,
-    });
+    persistChange(
+      {
+        content: plainText,
+        textContent: plainText,
+        mode: NoteMode.PLAIN,
+      },
+      { showProgressAndSuccess: false },
+    );
   };
 
   const copyToClipboard = async () => {
@@ -992,7 +992,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         message={
           modeConfirmHasImages
             ? 'Switching to plain text will permanently remove formatting and embedded images. Images will be replaced with placeholders. Continue?'
-            : 'Switching to plain text will permanently remove formatting and save immediately. Continue?'
+            : 'Switching to plain text will permanently remove formatting. Continue?'
         }
         variant="warning"
         confirmLabel="Switch"
