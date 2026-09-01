@@ -563,8 +563,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2.5 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
-              title="Pin note"
-              aria-label="Pin note"
+              title={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-label={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-pressed={note.isPinned}
             >
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
@@ -744,7 +745,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
-              title="Pin note"
+              title={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-label={note.isPinned ? 'Unpin note' : 'Pin note'}
+              aria-pressed={note.isPinned}
             >
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>

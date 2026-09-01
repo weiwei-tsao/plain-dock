@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Folder, Note } from '@/types';
 import {
@@ -48,6 +48,23 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
   // positioned dropdown near the bottom — portal to <body> and position from
   // the trigger's rect instead, same fix as EditorCanvas's overflow menu.
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const closeMenu = () => {
+    setMenuFolderId(null);
+    menuTriggerRef.current?.focus();
+  };
+
+  // Menu is portaled to <body>, out of normal tab order — let a keyboard user
+  // dismiss it without having to tab through whatever follows in the DOM.
+  useEffect(() => {
+    if (!menuFolderId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeMenu();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [menuFolderId]);
 
   const submitNewFolder = async () => {
     const name = newFolderName.trim();
@@ -135,9 +152,14 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
               </button>
               <button
                 onClick={(e) => {
+                  if (menuFolderId === folder.id) {
+                    closeMenu();
+                    return;
+                  }
                   const rect = e.currentTarget.getBoundingClientRect();
                   setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-                  setMenuFolderId((v) => (v === folder.id ? null : folder.id));
+                  menuTriggerRef.current = e.currentTarget;
+                  setMenuFolderId(folder.id);
                 }}
                 className="absolute top-1/2 right-1 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
                 title={`Folder options for ${folder.name}`}
@@ -156,16 +178,17 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
             if (!folder) return null;
             return createPortal(
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setMenuFolderId(null)} />
+                <div className="fixed inset-0 z-40" onClick={closeMenu} />
                 <div
                   className="fixed z-50 inline-flex items-center gap-0.5 rounded-lg border border-zinc-800 bg-zinc-900 p-1 shadow-xl"
                   style={{ top: menuPos.top, right: menuPos.right }}
                 >
                   <button
+                    autoFocus
                     onClick={() => {
                       setEditingFolderId(folder.id);
                       setEditingName(folder.name);
-                      setMenuFolderId(null);
+                      closeMenu();
                     }}
                     title="Rename"
                     aria-label="Rename"
@@ -176,7 +199,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                   <button
                     onClick={() => {
                       setDeleteTarget(folder);
-                      setMenuFolderId(null);
+                      closeMenu();
                     }}
                     title="Delete"
                     aria-label="Delete"
