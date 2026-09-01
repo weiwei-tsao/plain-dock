@@ -129,6 +129,9 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
               >
                 <FolderIcon className="h-4 w-4 shrink-0 text-zinc-500" />
                 <span className="min-w-0 flex-1 truncate text-left">{folder.name}</span>
+                <span className="text-[10px] text-zinc-600">
+                  {notes.filter((n) => n.folderId === folder.id).length}
+                </span>
               </button>
               <button
                 onClick={(e) => {
