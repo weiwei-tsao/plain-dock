@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import type { Note } from '@/types';
 import { Search, Plus, Pin, Loader2, PanelLeft } from 'lucide-react';
 import { deriveTitleFromText } from '@/lib/note-title';
+import { getContextSnippet, highlightMatch } from '@/lib/search-highlight';
 
 interface NotesListProps {
   notes: Note[];
@@ -83,11 +84,13 @@ const NotesList: React.FC<NotesListProps> = ({
   };
 
   const folderNotes = activeFolderId ? notes.filter((n) => n.folderId === activeFolderId) : notes;
-  const filteredNotes = folderNotes.filter(
-    (n) =>
-      n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      n.textContent.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredNotes = folderNotes.filter((n) => {
+    const { title } = displayParts(n);
+    return (
+      title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      n.textContent.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   const indicatorHeight = isRefreshing ? 40 : Math.round(pullY * 0.7);
   const spinnerOpacity = Math.min(pullY / PULL_THRESHOLD, 1);
@@ -123,6 +126,7 @@ const NotesList: React.FC<NotesListProps> = ({
           <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <input
             type="text"
+            id="notes-search-input"
             placeholder="Search..."
             value={searchQuery}
             onChange={(e) => onSearch(e.target.value)}
@@ -155,6 +159,7 @@ const NotesList: React.FC<NotesListProps> = ({
           <div className="space-y-1">
             {filteredNotes.map((note) => {
               const { title, preview } = displayParts(note);
+              const previewSnippet = preview ? getContextSnippet(preview, searchQuery) : '';
               return (
                 <button
                   key={note.id}
@@ -169,10 +174,14 @@ const NotesList: React.FC<NotesListProps> = ({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         {note.isPinned && <Pin className="h-3 w-3 shrink-0 text-indigo-400" />}
-                        <h3 className="truncate text-sm font-medium">{title}</h3>
+                        <h3 className="truncate text-sm font-medium">
+                          {highlightMatch(title, searchQuery)}
+                        </h3>
                       </div>
                       <p className="mt-1 truncate text-xs text-zinc-500">
-                        {preview || 'No content...'}
+                        {previewSnippet
+                          ? highlightMatch(previewSnippet, searchQuery)
+                          : 'No content...'}
                       </p>
                     </div>
                     <span className="mt-1 shrink-0 text-[10px] text-zinc-600">

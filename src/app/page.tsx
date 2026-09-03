@@ -370,6 +370,30 @@ export default function MainPage() {
     setNoteLoadAttempt((attempt) => attempt + 1);
   }, []);
 
+  // Cmd/Ctrl+K focuses search. Tiptap's extensions (StarterKit, Underline,
+  // Image, Table*, Link, CodeBlockLowlight) don't bind this shortcut, so no
+  // conflict with the editor.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+      event.preventDefault();
+
+      if (viewportTier === 'mobile') {
+        setShowFolders(false);
+        setMobilePanel('list');
+      } else if (viewportTier === 'tablet') {
+        setFolderOverlayOpen(false);
+      }
+
+      requestAnimationFrame(() => {
+        document.getElementById('notes-search-input')?.focus();
+      });
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [viewportTier]);
+
   const handleToggleFolders = useCallback(() => {
     if (viewportTier === 'desktop') {
       setFolderCollapsed((v) => !v);
