@@ -1,6 +1,24 @@
 import React from 'react';
 
 /**
+ * Case-insensitive indexOf that stays aligned with `text`'s own indices.
+ *
+ * `text.toLowerCase()` can change length for characters like Turkish İ
+ * (U+0130 → "i̇", 2 code units), so an index found in a fully-lowercased
+ * copy doesn't necessarily address the same position in `text`. Comparing
+ * per-window instead means every index this returns is always valid to
+ * slice directly from the original string.
+ */
+function indexOfCI(text: string, query: string, fromIndex = 0): number {
+  const lowerQuery = query.toLowerCase();
+  const qLen = query.length;
+  for (let i = fromIndex; i <= text.length - qLen; i++) {
+    if (text.slice(i, i + qLen).toLowerCase() === lowerQuery) return i;
+  }
+  return -1;
+}
+
+/**
  * Returns `text` unchanged if `query` doesn't match inside it (or is empty).
  * Otherwise returns a window around the first match, ellipsized on whichever
  * side was trimmed.
@@ -14,7 +32,7 @@ import React from 'react';
  */
 export function getContextSnippet(text: string, query: string, before = 15, after = 80): string {
   if (!query) return text;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  const idx = indexOfCI(text, query);
   if (idx === -1) return text;
 
   const start = Math.max(0, idx - before);
@@ -28,14 +46,12 @@ export function getContextSnippet(text: string, query: string, before = 15, afte
 export function highlightMatch(text: string, query: string): React.ReactNode {
   if (!query) return text;
 
-  const lowerText = text.toLowerCase();
-  const lowerQuery = query.toLowerCase();
   const parts: React.ReactNode[] = [];
   let i = 0;
   let key = 0;
 
   while (i < text.length) {
-    const idx = lowerText.indexOf(lowerQuery, i);
+    const idx = indexOfCI(text, query, i);
     if (idx === -1) {
       parts.push(text.slice(i));
       break;

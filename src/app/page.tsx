@@ -381,6 +381,8 @@ export default function MainPage() {
       if (viewportTier === 'mobile') {
         setShowFolders(false);
         setMobilePanel('list');
+      } else if (viewportTier === 'tablet') {
+        setFolderOverlayOpen(false);
       }
 
       requestAnimationFrame(() => {
