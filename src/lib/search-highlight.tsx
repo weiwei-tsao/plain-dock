@@ -2,16 +2,23 @@ import React from 'react';
 
 /**
  * Returns `text` unchanged if `query` doesn't match inside it (or is empty).
- * Otherwise returns a window of `radius` characters around the first match,
- * ellipsized on whichever side was trimmed.
+ * Otherwise returns a window around the first match, ellipsized on whichever
+ * side was trimmed.
+ *
+ * `before` is deliberately small: the preview renders in a single-line
+ * `truncate` (nowrap + ellipsis) container, which clips from the right at
+ * whatever the pane's rendered width allows — often well under 50 chars. A
+ * large `before` pushes the match itself past that clip point, so it never
+ * becomes visible even though it's in the DOM. `after` is generous since
+ * the browser's own ellipsis naturally handles trimming it.
  */
-export function getContextSnippet(text: string, query: string, radius = 50): string {
+export function getContextSnippet(text: string, query: string, before = 15, after = 80): string {
   if (!query) return text;
   const idx = text.toLowerCase().indexOf(query.toLowerCase());
   if (idx === -1) return text;
 
-  const start = Math.max(0, idx - radius);
-  const end = Math.min(text.length, idx + query.length + radius);
+  const start = Math.max(0, idx - before);
+  const end = Math.min(text.length, idx + query.length + after);
   const prefix = start > 0 ? '…' : '';
   const suffix = end < text.length ? '…' : '';
   return prefix + text.slice(start, end) + suffix;

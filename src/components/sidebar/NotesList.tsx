@@ -179,7 +179,9 @@ const NotesList: React.FC<NotesListProps> = ({
                         </h3>
                       </div>
                       <p className="mt-1 truncate text-xs text-zinc-500">
-                        {previewSnippet ? highlightMatch(previewSnippet, searchQuery) : 'No content...'}
+                        {previewSnippet
+                          ? highlightMatch(previewSnippet, searchQuery)
+                          : 'No content...'}
                       </p>
                     </div>
                     <span className="mt-1 shrink-0 text-[10px] text-zinc-600">
