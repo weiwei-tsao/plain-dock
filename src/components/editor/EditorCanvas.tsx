@@ -32,7 +32,7 @@ import {
   getNoteTextContent,
 } from '@/lib/sanitizer';
 import RichToolbar from './RichToolbar';
-import SearchHighlight from './SearchHighlight';
+import SearchHighlight, { getFirstMatchPos } from './SearchHighlight';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
 import {
@@ -370,13 +370,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     editor.commands.setSearchHighlight(searchQuery);
     if (!searchQuery) return;
 
-    const lowerQuery = searchQuery.toLowerCase();
-    let firstPos: number | null = null;
-    editor.state.doc.descendants((node, pos) => {
-      if (firstPos !== null || !node.isText || !node.text) return;
-      const idx = node.text.toLowerCase().indexOf(lowerQuery);
-      if (idx !== -1) firstPos = pos + idx;
-    });
+    const firstPos = getFirstMatchPos(editor.state);
     if (firstPos !== null) {
       editor.commands.setTextSelection(firstPos);
       // +1 lands strictly inside the decorated match span rather than on its

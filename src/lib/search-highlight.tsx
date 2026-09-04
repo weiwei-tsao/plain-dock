@@ -9,7 +9,7 @@ import React from 'react';
  * per-window instead means every index this returns is always valid to
  * slice directly from the original string.
  */
-function indexOfCI(text: string, query: string, fromIndex = 0): number {
+export function indexOfCI(text: string, query: string, fromIndex = 0): number {
   const lowerQuery = query.toLowerCase();
   const qLen = query.length;
   for (let i = fromIndex; i <= text.length - qLen; i++) {
