@@ -84,6 +84,7 @@ interface EditorAreaProps {
   folders: Folder[];
   onRetry: () => void;
   onCreateNote: () => void;
+  searchQuery: string;
 }
 
 function EditorArea({
@@ -98,6 +99,7 @@ function EditorArea({
   folders,
   onRetry,
   onCreateNote,
+  searchQuery,
 }: EditorAreaProps) {
   if (activeNoteStatus === 'loading') return <NoteLoadingState />;
 
@@ -129,6 +131,7 @@ function EditorArea({
         autoFocus={autoFocus}
         onAutoFocusHandled={onAutoFocusHandled}
         folders={folders}
+        searchQuery={searchQuery}
       />
     );
   }
@@ -439,6 +442,7 @@ export default function MainPage() {
     folders,
     onRetry: handleRetryNoteLoad,
     onCreateNote: handleCreateNote,
+    searchQuery,
   };
 
   const notesListProps = {

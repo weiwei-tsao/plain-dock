@@ -32,6 +32,7 @@ import {
   getNoteTextContent,
 } from '@/lib/sanitizer';
 import RichToolbar from './RichToolbar';
+import SearchHighlight, { getFirstMatchPos } from './SearchHighlight';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
 import {
@@ -215,6 +216,7 @@ interface EditorCanvasProps {
   autoFocus?: boolean;
   onAutoFocusHandled?: () => void;
   folders: Folder[];
+  searchQuery: string;
 }
 
 export interface EditorCanvasHandle {
@@ -222,7 +224,7 @@ export interface EditorCanvasHandle {
 }
 
 const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function EditorCanvas(
-  { note, onUpdate, onDelete, onBack, autoFocus, onAutoFocusHandled, folders },
+  { note, onUpdate, onDelete, onBack, autoFocus, onAutoFocusHandled, folders, searchQuery },
   ref,
 ) {
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
@@ -265,6 +267,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       TableHeader,
       TableCell,
       Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'] }),
+      SearchHighlight,
     ],
     content: note.content,
     editorProps: {
@@ -358,6 +361,25 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       onAutoFocusHandled?.();
     }
   }, [note.id, note.title, editor, note.content, note.mode, autoFocus, onAutoFocusHandled]);
+
+  // Highlight search matches in RICH mode and jump to the first one. Keyed on
+  // searchQuery/note.id rather than content, so typing in the note body doesn't
+  // re-trigger the scroll-to-first-match jump (only doc decorations recompute).
+  useEffect(() => {
+    if (!editor || note.mode !== NoteMode.RICH) return;
+    editor.commands.setSearchHighlight(searchQuery);
+    if (!searchQuery) return;
+
+    const firstPos = getFirstMatchPos(editor.state);
+    if (firstPos !== null) {
+      editor.commands.setTextSelection(firstPos);
+      // +1 lands strictly inside the decorated match span rather than on its
+      // boundary, where domAtPos can resolve to the node just before it.
+      let matchNode = editor.view.domAtPos(firstPos + 1).node;
+      if (matchNode.nodeType === Node.TEXT_NODE) matchNode = matchNode.parentElement as Node;
+      (matchNode as HTMLElement)?.scrollIntoView?.({ block: 'center' });
+    }
+  }, [searchQuery, note.id, note.mode, editor]);
 
   // Auto-resize textarea to match content height
   useEffect(() => {
