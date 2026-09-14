@@ -1,16 +1,10 @@
-import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 
-import { createNote, login, startsWith, uniqueName } from './helpers';
+import { createNote, deleteActiveNote, login, startsWith, uniqueName } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await login(page);
 });
-
-async function deleteActiveNote(page: Page) {
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-}
 
 test('creates, edits, autosaves, and deletes a note', async ({ page }) => {
   await createNote(page);

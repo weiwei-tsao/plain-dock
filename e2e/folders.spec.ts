@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { createNote, login, startsWith, uniqueName } from './helpers';
+import { createNote, deleteActiveNote, login, startsWith, uniqueName } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await login(page);
@@ -39,6 +39,5 @@ test('creates, renames, moves a note into, and deletes a folder', async ({ page 
 
   // Folder deletion moves the note back to All Notes (onDelete: SetNull) — clean it up.
   await page.getByRole('button', { name: startsWith(noteTitle) }).click();
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await deleteActiveNote(page);
 });

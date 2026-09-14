@@ -1,5 +1,10 @@
 import type { Page, Response } from '@playwright/test';
 
+// Waits for the initial GET /api/notes, not just the URL change — the main
+// page mounts on a hardcoded 'list'/'desktop' initial state and only settles
+// into its real state (e.g. auto-selecting an existing note, switching to
+// the editor panel) once that fetch resolves. A test that reads UI state
+// right after login without this wait can observe that transient render.
 export async function login(page: Page) {
   const password = process.env.APP_PASSWORD;
   if (!password) {
@@ -8,8 +13,23 @@ export async function login(page: Page) {
 
   await page.goto('/login');
   await page.getByPlaceholder('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (res) => res.request().method() === 'GET' && res.url().endsWith('/api/notes'),
+    ),
+    page.getByRole('button', { name: 'Sign In' }).click(),
+  ]);
   await page.waitForURL('/');
+}
+
+export async function deleteActiveNote(page: Page) {
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (res) => res.request().method() === 'DELETE' && /\/api\/notes\/[^/]+$/.test(res.url()),
+    ),
+    page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click(),
+  ]);
 }
 
 // Clicking "New note" briefly shows the previous note's editor (or a loading

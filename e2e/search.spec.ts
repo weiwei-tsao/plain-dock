@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { createNote, login, uniqueName } from './helpers';
+import { createNote, deleteActiveNote, login, uniqueName } from './helpers';
 
 test.describe('search highlighting', () => {
   test.beforeEach(async ({ page }) => {
@@ -16,8 +16,7 @@ test.describe('search highlighting', () => {
     await expect(page.locator('mark', { hasText: 'zzsearch' })).toBeVisible();
 
     await page.locator('#notes-search-input').fill('');
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+    await deleteActiveNote(page);
   });
 });
 
