@@ -11,10 +11,24 @@ test('creates, edits, autosaves, and deletes a note', async ({ page }) => {
 
   const title = uniqueName('E2E Note');
   const content = 'Hello from Playwright';
+
+  // Title and content share one debounce timer (see EditorCanvas's
+  // saveTimeoutRef) — under a slow run the title-only save can land first
+  // and flip the status to SAVED while the content save is still pending.
+  // Wait for the PUT that actually carries this content, not the status text.
+  const contentSaved = page.waitForResponse(async (res) => {
+    if (res.request().method() !== 'PUT' || !/\/api\/notes\/[^/]+$/.test(res.url())) return false;
+    try {
+      const body = (await res.json()) as { content?: string };
+      return body.content === content;
+    } catch {
+      return false;
+    }
+  });
+
   await page.getByPlaceholder('Untitled').fill(title);
   await page.getByPlaceholder('Start typing plain text...').fill(content);
-
-  await expect(page.getByText('SAVED')).toBeVisible();
+  await contentSaved;
 
   // Reload to confirm the autosave actually persisted, not just local state.
   await page.reload();
