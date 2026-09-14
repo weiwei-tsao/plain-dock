@@ -8,15 +8,19 @@ locally on demand.
 1. Point `DATABASE_URL` at a disposable database, not your everyday `dev.db`
    — tests create and delete their own notes/folders but still write real
    rows and could collide with notes you're actively editing.
-2. Start the app against that database with a known `APP_PASSWORD`:
+2. Start the app against that database with a known `APP_PASSWORD`. Note that
+   Prisma resolves a relative `DATABASE_URL` from `prisma/schema.prisma`'s own
+   directory, so `file:./e2e.db` here creates `prisma/e2e.db`:
    ```bash
-   DATABASE_URL="file:./prisma/e2e.db" APP_PASSWORD="test-password" JWT_SECRET="test-secret" \
+   DATABASE_URL="file:./e2e.db" APP_PASSWORD="test-password" JWT_SECRET="test-secret" \
      npx prisma migrate deploy
-   DATABASE_URL="file:./prisma/e2e.db" APP_PASSWORD="test-password" JWT_SECRET="test-secret" \
+   DATABASE_URL="file:./e2e.db" APP_PASSWORD="test-password" JWT_SECRET="test-secret" \
      npm run dev
    ```
-3. In another terminal, run the suite with the same password:
+3. Install the Playwright browser once, then run the suite with the same
+   password:
    ```bash
+   npx playwright install chromium
    APP_PASSWORD="test-password" npm run test:e2e
    ```
 

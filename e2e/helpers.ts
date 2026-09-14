@@ -15,15 +15,21 @@ export async function login(page: Page) {
 // Clicking "New note" briefly shows the previous note's editor (or a loading
 // skeleton) before the new note's GET resolves and its empty inputs mount —
 // filling immediately after the click can land on the about-to-unmount old
-// instance instead. Waiting for that GET closes the race.
-export async function createNote(page: Page) {
-  const [response] = await Promise.all([
+// instance instead. Waiting for the create response, then the detail GET for
+// that specific ID, closes the race — matching on any note GET isn't enough
+// since an already-active note's own detail GET can still be in flight.
+export async function createNote(page: Page): Promise<string> {
+  const [postResponse] = await Promise.all([
     page.waitForResponse(
-      (res) => res.request().method() === 'GET' && /\/api\/notes\/[^/]+$/.test(res.url()),
+      (res) => res.request().method() === 'POST' && res.url().endsWith('/api/notes'),
     ),
     page.getByRole('button', { name: 'New note', exact: true }).click(),
   ]);
-  await response.finished();
+  const { id } = (await postResponse.json()) as { id: string };
+  await page.waitForResponse(
+    (res) => res.request().method() === 'GET' && res.url().endsWith(`/api/notes/${id}`),
+  );
+  return id;
 }
 
 export function uniqueName(prefix: string): string {

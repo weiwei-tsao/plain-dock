@@ -63,15 +63,22 @@ test.describe('Cmd/Ctrl+K on mobile', () => {
     page,
   }) => {
     const searchInput = page.locator('#notes-search-input');
+    let createdNoteId: string | null = null;
     if (await searchInput.isVisible()) {
       // Already on the list panel (no note was auto-selected) — create one to
       // reach the editor panel this test needs to start from.
-      await createNote(page);
+      createdNoteId = await createNote(page);
     }
     await expect(searchInput).toBeHidden();
 
     await page.keyboard.press('Control+k');
     await expect(searchInput).toBeVisible();
     await expect(searchInput).toBeFocused();
+
+    // The app only auto-deletes an empty note on in-app navigation, which
+    // pressing Ctrl+K doesn't trigger — clean up directly via the API instead.
+    if (createdNoteId) {
+      await page.request.delete(`/api/notes/${createdNoteId}`);
+    }
   });
 });
