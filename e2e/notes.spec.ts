@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-import { createNote, deleteActiveNote, login, startsWith, uniqueName } from './helpers';
+import {
+  createNote,
+  deleteActiveNote,
+  login,
+  startsWith,
+  uniqueName,
+  waitForContentSave,
+} from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await login(page);
@@ -12,26 +19,17 @@ test('creates, edits, autosaves, and deletes a note', async ({ page }) => {
   const title = uniqueName('E2E Note');
   const content = 'Hello from Playwright';
 
-  // Title and content share one debounce timer (see EditorCanvas's
-  // saveTimeoutRef) — under a slow run the title-only save can land first
-  // and flip the status to SAVED while the content save is still pending.
-  // Wait for the PUT that actually carries this content, not the status text.
-  const contentSaved = page.waitForResponse(async (res) => {
-    if (res.request().method() !== 'PUT' || !/\/api\/notes\/[^/]+$/.test(res.url())) return false;
-    try {
-      const body = (await res.json()) as { content?: string };
-      return body.content === content;
-    } catch {
-      return false;
-    }
-  });
-
+  const contentSaved = waitForContentSave(page, content);
   await page.getByPlaceholder('Untitled').fill(title);
   await page.getByPlaceholder('Start typing plain text...').fill(content);
   await contentSaved;
 
   // Reload to confirm the autosave actually persisted, not just local state.
+  // Reselect by title afterward — reload also resets which note the app
+  // auto-selects, and that isn't necessarily this one (e.g. a pre-existing
+  // pinned note in the disposable DB always sorts first).
   await page.reload();
+  await page.getByRole('button', { name: startsWith(title) }).click();
   await expect(page.getByPlaceholder('Untitled')).toHaveValue(title);
   await expect(page.getByPlaceholder('Start typing plain text...')).toHaveValue(content);
 
@@ -41,14 +39,22 @@ test('creates, edits, autosaves, and deletes a note', async ({ page }) => {
 
 test('switches a note between PLAIN and RICH mode', async ({ page }) => {
   await createNote(page);
-  await page.getByPlaceholder('Start typing plain text...').fill('Some plain text');
+
+  const plainText = 'Some plain text';
+  // Switching mode calls persistChange directly, bypassing the debounce
+  // timer's clearTimeout — an unfinished plain-content save left pending
+  // here would still fire later and can overwrite the mode back to PLAIN
+  // once its (stale) request reaches the front of the save queue.
+  const plainSaved = waitForContentSave(page, plainText);
+  await page.getByPlaceholder('Start typing plain text...').fill(plainText);
+  await plainSaved;
 
   await page.getByRole('button', { name: 'PLAIN', exact: true }).click();
-  await expect(page.locator('.ProseMirror')).toContainText('Some plain text');
+  await expect(page.locator('.ProseMirror')).toContainText(plainText);
 
   await page.getByRole('button', { name: 'RICH', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Switch' }).click();
-  await expect(page.getByPlaceholder('Start typing plain text...')).toHaveValue('Some plain text');
+  await expect(page.getByPlaceholder('Start typing plain text...')).toHaveValue(plainText);
 
   await deleteActiveNote(page);
 });

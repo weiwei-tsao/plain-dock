@@ -21,6 +21,22 @@ export async function login(page: Page) {
   await page.waitForLoadState('networkidle');
 }
 
+// Waits for the PUT that actually persists this exact content, rather than a
+// generic SAVED status flash — title and content edits share one debounce
+// timer, so under a slow run an earlier field's save can resolve first and
+// flip the status while this one is still pending.
+export function waitForContentSave(page: Page, content: string) {
+  return page.waitForResponse(async (res) => {
+    if (res.request().method() !== 'PUT' || !/\/api\/notes\/[^/]+$/.test(res.url())) return false;
+    try {
+      const body = (await res.json()) as { content?: string };
+      return body.content === content;
+    } catch {
+      return false;
+    }
+  });
+}
+
 export async function deleteActiveNote(page: Page) {
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
   await Promise.all([
