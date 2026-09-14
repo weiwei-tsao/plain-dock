@@ -20,12 +20,13 @@ npm run format:check     # Prettier check (no write)
 npm run docker:sync-from-turso  # Manual Turso -> Docker SQLite import with backup
 npm test                 # Run Vitest test suite
 npm run test:watch       # Vitest in watch mode
+npm run test:e2e         # Run Playwright E2E suite (see e2e/README.md for setup)
 npm run typecheck        # TypeScript type check (tsc --noEmit)
 npx prisma migrate dev   # Create/apply migrations during development
 npx prisma studio        # GUI for browsing the SQLite database
 ```
 
-Vitest is the test runner (`vitest.config.ts`). Test files live alongside the code they cover (`*.test.mjs`/`*.test.ts`).
+Vitest is the test runner (`vitest.config.ts`). Test files live alongside the code they cover (`*.test.mjs`/`*.test.ts`). Playwright E2E tests live in `e2e/`; neither suite is CI-gated (see issue #39). For visual/exploratory checks Playwright can't express as a DOM assertion, see `docs/browser-use-testing.md`.
 
 ## Environment Variables
 
