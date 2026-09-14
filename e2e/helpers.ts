@@ -1,10 +1,13 @@
 import type { Page, Response } from '@playwright/test';
 
-// Waits for the initial GET /api/notes, not just the URL change — the main
-// page mounts on a hardcoded 'list'/'desktop' initial state and only settles
-// into its real state (e.g. auto-selecting an existing note, switching to
-// the editor panel) once that fetch resolves. A test that reads UI state
-// right after login without this wait can observe that transient render.
+// The main page mounts on a hardcoded 'list'/'desktop' initial state and
+// only settles into its real state (e.g. auto-selecting an existing note,
+// switching to the editor panel) once its initial fetches resolve and React
+// processes them. Waiting for a specific response's network event isn't
+// enough — there's still a gap before the resulting state update renders —
+// so wait for the network to go fully quiet instead, covering the initial
+// notes/folders fetch and whatever note-detail fetch an auto-selection
+// triggers, plus settling time past it.
 export async function login(page: Page) {
   const password = process.env.APP_PASSWORD;
   if (!password) {
@@ -13,13 +16,9 @@ export async function login(page: Page) {
 
   await page.goto('/login');
   await page.getByPlaceholder('Password').fill(password);
-  await Promise.all([
-    page.waitForResponse(
-      (res) => res.request().method() === 'GET' && res.url().endsWith('/api/notes'),
-    ),
-    page.getByRole('button', { name: 'Sign In' }).click(),
-  ]);
+  await page.getByRole('button', { name: 'Sign In' }).click();
   await page.waitForURL('/');
+  await page.waitForLoadState('networkidle');
 }
 
 export async function deleteActiveNote(page: Page) {
