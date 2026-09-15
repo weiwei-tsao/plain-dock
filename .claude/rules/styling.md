@@ -4,7 +4,7 @@
 
 - Tailwind CSS v4 via PostCSS plugin (`@tailwindcss/postcss`) — not CDN, not `tailwind.config`.
 - Imported as `@import "tailwindcss"` in `src/app/globals.css`.
-- Custom styles (scrollbar, CodeMirror) also live in `globals.css`.
+- Custom styles (scrollbar) also live in `globals.css`. CodeMirror editor styles do not — see below.
 
 ## Color Palette (Dark Theme Only)
 
@@ -55,7 +55,7 @@ No light mode — dark theme throughout.
 
 ## CodeMirror Styles
 
-- All CodeMirror editor styles live in `src/app/globals.css` — not inline or in component files.
+- All CodeMirror editor styles are defined via `EditorView.theme(...)` and `HighlightStyle.define(...)` inside `src/components/editor/markdown-theme.ts` — not inline and not in `globals.css`.
 - Editor content area uses Markdown syntax highlighting with custom color overrides.
 - Inline code: `#a78bfa` (purple) on `#1a1a1a` background.
 - Code blocks: `#0f0f0f` background, monospace.
