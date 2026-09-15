@@ -222,9 +222,10 @@ Backup differs by environment and must not be described as one mechanism:
   file plus its `-wal`/`-shm` sidecars where present — the same convention
   `sync-turso-to-docker.mjs` already uses.
 - **Turso (remote libSQL):** there is no local file to copy. Before running
-  `--write` against a `libsql://`/Turso `DATABASE_URL`, require an
-  independent backup — e.g. `turso db shell <database> .dump > backup.sql`
-  — and treat its absence as a hard stop, not a warning.
+  `--write` against a `libsql://`/Turso `DATABASE_URL`, require a verified,
+  independent backup (for example, via a Turso export/dump workflow — the
+  exact command is an implementation/runbook detail, not fixed here) and
+  treat its absence as a hard stop, not a warning.
 
 Not designed as idempotent or safe to run repeatedly against live traffic —
 it's a one-time cutover, run once per environment (local dev SQLite,
@@ -240,10 +241,10 @@ marker/versioning is needed for a script with this lifecycle.
 - `src/lib/markdown/terminal-table.test.ts` — moved from
   `sanitizer/terminalTable.test.mjs`, unchanged
 - Delete `src/lib/sanitizer/index.test.ts` (tests the deleted HTML pipeline)
-- Migration script conversion function: fixture-based tests covering each
-  `ALLOWED_TAGS` element plus the `<img>` special case (including a
-  base64 `data:` src), since that function is the one place this refactor
-  touches real user data
+- Migration script conversion function: fixture-based tests covering the
+  supported migration input structures, including tables, links, nested
+  marks, code blocks, lists, and `<img>` with base64 `data:` src, since
+  that function is the one place this refactor touches real user data
 - Playwright e2e (`e2e/`): RICH-mode specs currently assume ProseMirror DOM
   structure and must be updated for CodeMirror's DOM — typing, autosave,
   search highlight, toolbar, paste (terminal table, image), mode switch
