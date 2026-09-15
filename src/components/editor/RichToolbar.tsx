@@ -17,7 +17,7 @@ import {
 interface RichToolbarProps {
   onToggleInlineMark: (marker: string) => void;
   onToggleLinePrefix: (prefix: string) => void;
-  onToggleCodeBlock: () => void;
+  onWrapCodeBlock: () => void;
 }
 
 const ToolbarButton: React.FC<{
@@ -39,7 +39,7 @@ const Divider = () => <div className="mx-1 h-4 w-px bg-zinc-800" />;
 const RichToolbar: React.FC<RichToolbarProps> = ({
   onToggleInlineMark,
   onToggleLinePrefix,
-  onToggleCodeBlock,
+  onWrapCodeBlock,
 }) => {
   return (
     <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/50">
@@ -68,7 +68,7 @@ const RichToolbar: React.FC<RichToolbarProps> = ({
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton onClick={onToggleCodeBlock} title="Code Block">
+        <ToolbarButton onClick={onWrapCodeBlock} title="Code Block">
           <Code className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton onClick={() => onToggleLinePrefix('> ')} title="Blockquote">

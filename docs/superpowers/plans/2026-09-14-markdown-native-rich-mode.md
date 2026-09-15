@@ -29,7 +29,7 @@ The spec settles the architecture; these four small decisions were needed to act
 1. **Word/character counts for RICH mode** are computed from `markdownToPlainText(content)`, not raw `content` — otherwise `**` / `#` syntax characters would inflate the count, regressing the old Tiptap behavior (which counted rendered text, not markup).
 2. **RICH mode now uses the same `font-mono text-sm text-zinc-400 leading-relaxed` styling as PLAIN mode** (`.claude/rules/styling.md`'s existing PLAIN-mode convention), since both are now source-text editors rather than one being a rendered rich-text canvas.
 3. **Toolbar buttons no longer show an active/highlighted state** (the old `editor.isActive('bold')` check). Determining "is the current selection bold" from raw Markdown text has the same partial-selection ambiguity that got Clear Formatting dropped — buttons become stateless action triggers.
-4. **`toggleCodeBlock` does not support toggling an existing fence back off** in v1 — it only wraps the current selection in a new fence. A user can delete the ` ``` ` lines by hand, same as any other hand-typed Markdown. Real toggle-off detection is deferred until it's a real pain point.
+4. **`wrapCodeBlock` does not support toggling an existing fence back off** in v1 — it only wraps the current selection in a new fence. A user can delete the ` ``` ` lines by hand, same as any other hand-typed Markdown. Real toggle-off detection is deferred until it's a real pain point.
 
 ---
 
@@ -225,7 +225,7 @@ git commit -m "feat(markdown): add markdownToPlainText text projection"
   - `interface FormattingResult { text: string; selection: Selection }`
   - `toggleInlineMark(text: string, sel: Selection, marker: string): FormattingResult`
   - `toggleLinePrefix(text: string, sel: Selection, prefix: string): FormattingResult`
-  - `toggleCodeBlock(text: string, sel: Selection): FormattingResult`
+  - `wrapCodeBlock(text: string, sel: Selection): FormattingResult`
   - Consumed by Task 7 (`MarkdownEditorHandle.applyFormatting`) and Task 8 (`RichToolbar`).
 
 - [ ] **Step 1: Write the failing tests**
@@ -233,7 +233,7 @@ git commit -m "feat(markdown): add markdownToPlainText text projection"
 ```ts
 // src/lib/markdown/formatting.test.ts
 import { describe, it, expect } from 'vitest';
-import { toggleInlineMark, toggleLinePrefix, toggleCodeBlock } from './formatting';
+import { toggleInlineMark, toggleLinePrefix, wrapCodeBlock } from './formatting';
 
 describe('toggleInlineMark', () => {
   it('wraps a selection that has no marker yet', () => {
@@ -279,9 +279,9 @@ describe('toggleLinePrefix', () => {
   });
 });
 
-describe('toggleCodeBlock', () => {
+describe('wrapCodeBlock', () => {
   it('wraps the selected line(s) in a fenced code block', () => {
-    const result = toggleCodeBlock('const x = 1;', { start: 0, end: 12 });
+    const result = wrapCodeBlock('const x = 1;', { start: 0, end: 12 });
     expect(result.text).toBe('```\nconst x = 1;\n```');
     expect(result.selection).toEqual({ start: 4, end: 16 });
   });
@@ -351,7 +351,7 @@ export function toggleLinePrefix(text: string, sel: Selection, prefix: string): 
   return { text: newText, selection: { start: lineStart, end: lineStart + newBlock.length } };
 }
 
-export function toggleCodeBlock(text: string, sel: Selection): FormattingResult {
+export function wrapCodeBlock(text: string, sel: Selection): FormattingResult {
   const { lineStart, lineEnd } = lineBounds(text, sel);
   const block = text.slice(lineStart, lineEnd);
   const fenced = '```\n' + block + '\n```';
@@ -796,7 +796,7 @@ This is the big swap. It must land as one commit (or a tight sequence of sub-com
 - Modify: `src/components/editor/RichToolbar.tsx` (full rewrite)
 
 **Interfaces:**
-- Consumes: `MarkdownEditor`, `MarkdownEditorHandle` (Task 7); `toggleInlineMark`, `toggleLinePrefix`, `toggleCodeBlock`, `FormattingResult` (Task 3); `markdownToPlainText` (Task 2); `detectTerminalTable` (Task 1).
+- Consumes: `MarkdownEditor`, `MarkdownEditorHandle` (Task 7); `toggleInlineMark`, `toggleLinePrefix`, `wrapCodeBlock`, `FormattingResult` (Task 3); `markdownToPlainText` (Task 2); `detectTerminalTable` (Task 1).
 - Produces: `EditorCanvasHandle.getCurrentState(): { title: string; textContent: string }` (signature unchanged, consumed by `src/app/page.tsx:267` — no change needed there).
 
 - [ ] **Step 1: Delete the Tiptap-era conversion functions and types**
@@ -832,7 +832,7 @@ with:
 ```ts
 import { detectTerminalTable } from '@/lib/markdown/terminal-table';
 import { markdownToPlainText } from '@/lib/markdown/text-projection';
-import { toggleInlineMark, toggleLinePrefix, toggleCodeBlock } from '@/lib/markdown/formatting';
+import { toggleInlineMark, toggleLinePrefix, wrapCodeBlock } from '@/lib/markdown/formatting';
 import MarkdownEditor, { type MarkdownEditorHandle } from './MarkdownEditor';
 ```
 
@@ -1087,7 +1087,7 @@ to:
   <RichToolbar
     onToggleInlineMark={(marker) => applyFormatting((text, sel) => toggleInlineMark(text, sel, marker))}
     onToggleLinePrefix={(prefix) => applyFormatting((text, sel) => toggleLinePrefix(text, sel, prefix))}
-    onToggleCodeBlock={() => applyFormatting(toggleCodeBlock)}
+    onWrapCodeBlock={() => applyFormatting(wrapCodeBlock)}
   />
 )}
 ```
@@ -1104,7 +1104,7 @@ import { Bold, Italic, Strikethrough, Code, List, ListOrdered, Heading1, Heading
 interface RichToolbarProps {
   onToggleInlineMark: (marker: string) => void;
   onToggleLinePrefix: (prefix: string) => void;
-  onToggleCodeBlock: () => void;
+  onWrapCodeBlock: () => void;
 }
 
 const ToolbarButton: React.FC<{
@@ -1126,7 +1126,7 @@ const Divider = () => <div className="mx-1 h-4 w-px bg-zinc-800" />;
 const RichToolbar: React.FC<RichToolbarProps> = ({
   onToggleInlineMark,
   onToggleLinePrefix,
-  onToggleCodeBlock,
+  onWrapCodeBlock,
 }) => {
   return (
     <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/50">
@@ -1155,7 +1155,7 @@ const RichToolbar: React.FC<RichToolbarProps> = ({
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton onClick={onToggleCodeBlock} title="Code Block">
+        <ToolbarButton onClick={onWrapCodeBlock} title="Code Block">
           <Code className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton onClick={() => onToggleLinePrefix('> ')} title="Blockquote">
@@ -1740,7 +1740,7 @@ ignored everywhere).
   regex-based Markdown -> plain text used for `Note.textContent` (sidebar
   preview, search, title fallback), Copy Plain, and Export `.txt`. Not a
   full parser — approximate results are fine for these consumers.
-- `formatting.ts` — `toggleInlineMark`, `toggleLinePrefix`, `toggleCodeBlock`:
+- `formatting.ts` — `toggleInlineMark`, `toggleLinePrefix`, `wrapCodeBlock`:
   pure functions taking `(text, selection, marker/prefix)` and returning
   `{ text, selection }`, used by `RichToolbar.tsx` via `MarkdownEditor`'s
   `applyFormatting`.

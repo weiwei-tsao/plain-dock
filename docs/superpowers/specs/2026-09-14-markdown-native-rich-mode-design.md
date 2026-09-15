@@ -160,7 +160,7 @@ transaction API, taking/returning `(text, selectionStart, selectionEnd)`:
 ```ts
 toggleInlineMark(text, sel, marker)      // ** _ ~~ `
 toggleLinePrefix(text, sel, prefix)      // # ## - 1. >
-toggleCodeBlock(text, sel)
+wrapCodeBlock(text, sel)
 ```
 
 `MarkdownEditor.tsx` translates these pure-function results into CodeMirror
@@ -237,7 +237,7 @@ marker/versioning is needed for a script with this lifecycle.
 
 - `src/lib/markdown/text-projection.test.ts` — `markdownToPlainText()`
 - `src/lib/markdown/formatting.test.ts` — `toggleInlineMark`,
-  `toggleLinePrefix`, `toggleCodeBlock`
+  `toggleLinePrefix`, `wrapCodeBlock`
 - `src/lib/markdown/terminal-table.test.ts` — moved from
   `sanitizer/terminalTable.test.mjs`, unchanged
 - Delete `src/lib/sanitizer/index.test.ts` (tests the deleted HTML pipeline)

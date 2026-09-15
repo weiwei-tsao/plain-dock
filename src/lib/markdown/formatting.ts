@@ -51,7 +51,7 @@ export function toggleLinePrefix(text: string, sel: Selection, prefix: string): 
   return { text: newText, selection: { start: lineStart, end: lineStart + newBlock.length } };
 }
 
-export function toggleCodeBlock(text: string, sel: Selection): FormattingResult {
+export function wrapCodeBlock(text: string, sel: Selection): FormattingResult {
   const { lineStart, lineEnd } = lineBounds(text, sel);
   const block = text.slice(lineStart, lineEnd);
   const fenced = '```\n' + block + '\n```';

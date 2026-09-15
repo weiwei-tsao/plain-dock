@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toggleInlineMark, toggleLinePrefix, toggleCodeBlock } from './formatting';
+import { toggleInlineMark, toggleLinePrefix, wrapCodeBlock } from './formatting';
 
 describe('toggleInlineMark', () => {
   it('wraps a selection that has no marker yet', () => {
@@ -45,9 +45,9 @@ describe('toggleLinePrefix', () => {
   });
 });
 
-describe('toggleCodeBlock', () => {
+describe('wrapCodeBlock', () => {
   it('wraps the selected line(s) in a fenced code block', () => {
-    const result = toggleCodeBlock('const x = 1;', { start: 0, end: 12 });
+    const result = wrapCodeBlock('const x = 1;', { start: 0, end: 12 });
     expect(result.text).toBe('```\nconst x = 1;\n```');
     expect(result.selection).toEqual({ start: 4, end: 16 });
   });

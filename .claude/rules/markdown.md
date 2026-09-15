@@ -17,7 +17,7 @@ ignored everywhere).
   regex-based Markdown -> plain text used for `Note.textContent` (sidebar
   preview, search, title fallback), Copy Plain, and Export `.txt`. Not a
   full parser — approximate results are fine for these consumers.
-- `formatting.ts` — `toggleInlineMark`, `toggleLinePrefix`, `toggleCodeBlock`:
+- `formatting.ts` — `toggleInlineMark`, `toggleLinePrefix`, `wrapCodeBlock`:
   pure functions taking `(text, selection, marker/prefix)` and returning
   `{ text, selection }`, used by `RichToolbar.tsx` via `MarkdownEditor`'s
   `applyFormatting`.
