@@ -15,8 +15,8 @@ import { ALLOWED_TAGS, ALLOWED_STYLES, DANGEROUS_TAGS } from './config';
 import { TAG_NORMALIZE_MAP } from './normalize';
 
 export { markdownToHtml } from './markdown';
-export { detectTerminalTable } from './terminalTable';
-export type { TerminalTableResult } from './terminalTable';
+export { detectTerminalTable } from '../markdown/terminal-table';
+export type { TerminalTableResult } from '../markdown/terminal-table';
 
 export function sanitizeHTML(rawHTML: string): string {
   if (!rawHTML || rawHTML.trim() === '') return '';

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { detectTerminalTable } from './terminalTable.ts';
+import { detectTerminalTable } from './terminal-table';
 
 test('detects a Unicode box-drawing table', () => {
   const input = [
@@ -100,7 +100,7 @@ test('returns none for empty input', () => {
 });
 
 test('generated markdown renders as a real table', async () => {
-  const { markdownToHtml } = await import('./markdown.ts');
+  const { markdownToHtml } = await import('../sanitizer/markdown');
   const input = [
     '┌──────┬──────────┐',
     '│ Repo │ Status   │',

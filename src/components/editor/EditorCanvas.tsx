@@ -27,10 +27,10 @@ import {
   sanitizeHTML,
   collapseEmptyParagraphs,
   markdownToHtml,
-  detectTerminalTable,
   wrapPlainText,
   getNoteTextContent,
 } from '@/lib/sanitizer';
+import { detectTerminalTable } from '@/lib/markdown/terminal-table';
 import RichToolbar from './RichToolbar';
 import SearchHighlight, { getFirstMatchPos } from './SearchHighlight';
 import ConfirmDialog from '../ui/ConfirmDialog';
