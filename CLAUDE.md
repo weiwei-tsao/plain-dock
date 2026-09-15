@@ -149,6 +149,22 @@ npm run docker:sync-from-turso # manually replace ./data/notes.db with Turso sna
 - `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
 - Container auto-restarts on crash (`restart: unless-stopped`).
 
+### One-Time Rich-HTML-to-Markdown Migration
+
+`scripts/migrate-rich-html-to-markdown.mjs` converts existing RICH notes from the old Tiptap HTML format to the canonical Markdown `content` this branch introduces. Run it once per environment (local dev, Docker, Turso) after deploying this branch's code:
+
+```bash
+DATABASE_URL="file:./prisma/dev.db" npm run migrate:rich-html-to-markdown            # dry run (default) - reports only
+DATABASE_URL="file:./prisma/dev.db" npm run migrate:rich-html-to-markdown -- --write # actually converts and writes
+```
+
+- Defaults to a dry run; nothing is written until `--write` is passed.
+- Against a Turso `DATABASE_URL` (`libsql://` or `https://`), `--write` also requires `--turso-backup-confirmed` — take an independent Turso export/backup first, since the script has no local file to copy for a remote database.
+- Against a file `DATABASE_URL`, `--write` backs up the existing database file (and its `-wal`/`-shm` sidecars) before writing; if no existing file is found at that path, the script refuses to proceed rather than migrate with zero backup — this usually means `DATABASE_URL` is wrong, not that it's safe to continue.
+- **Unlike `scripts/sync-turso-to-docker.mjs`, this script does NOT auto-load a `.env` file.** `DATABASE_URL` (and `TURSO_AUTH_TOKEN` for Turso) must be set explicitly in the invoking shell/command — it will not pick up `.env` automatically.
+- Idempotent: re-running it against already-migrated notes is a no-op (already-Markdown content is detected and skipped, not reconverted).
+- Delete this script from the repo once all environments (local, Docker, Turso/Vercel) have been verified migrated.
+
 ### Vercel + Turso
 
 ```bash

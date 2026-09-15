@@ -143,7 +143,7 @@ export function markdownToPlainTextForMigration(markdown) {
     .replace(/`([^`]+)`/g, '$1');
 }
 
-async function migrateRichNotes(prisma, { write }) {
+export async function migrateRichNotes(prisma, { write }) {
   const notes = await prisma.note.findMany({ where: { mode: 'RICH' } });
   let converted = 0;
   let skipped = 0;
@@ -155,7 +155,22 @@ async function migrateRichNotes(prisma, { write }) {
         skipped++;
         continue;
       }
+      // Not idempotency-safe otherwise: a second run against already-migrated
+      // (Markdown, not HTML) content would parse as a single JSDOM text node
+      // (body.children.length === 0), so htmlToMarkdown would silently return
+      // '' and blank the note out. Treat non-HTML content as already migrated.
+      if (!/<[a-z][^>]*>/i.test(note.content)) {
+        skipped++;
+        continue;
+      }
       const markdown = htmlToMarkdown(note.content);
+      if (markdown === '' && note.content.trim() !== '') {
+        failed++;
+        console.error(
+          `Failed to convert note ${note.id}: conversion produced empty Markdown from non-empty HTML content - refusing to write.`,
+        );
+        continue;
+      }
       const textContent = markdownToPlainTextForMigration(markdown);
       if (write) {
         await prisma.note.update({
@@ -216,6 +231,14 @@ export async function runMigration({ argv = process.argv.slice(2), env = process
   if (write && isFileUrl) {
     const filePath = path.resolve(databaseUrl.slice('file:'.length));
     backupPath = await createBackupIfExists(filePath);
+    if (backupPath === null) {
+      throw new Error(
+        `No existing database file found at "${filePath}" to back up before --write. ` +
+          'Verify DATABASE_URL points at the correct, existing database file before retrying. ' +
+          '(This could be a genuinely new/empty target, but a one-time migration of real data ' +
+          'should never proceed with zero backup and no acknowledgment.)',
+      );
+    }
   }
 
   const prisma = isTurso

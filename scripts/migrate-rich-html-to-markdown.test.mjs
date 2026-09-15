@@ -24,6 +24,7 @@ vi.mock('@prisma/client', () => ({
 const {
   htmlToMarkdown,
   markdownToPlainTextForMigration,
+  migrateRichNotes,
   runMigration,
 } = await import('./migrate-rich-html-to-markdown.mjs');
 
@@ -83,6 +84,30 @@ describe('markdownToPlainTextForMigration', () => {
   });
 });
 
+describe('migrateRichNotes idempotency (Fix 1)', () => {
+  it('skips a note whose content is already Markdown instead of blanking it out', async () => {
+    // A fully fake, self-contained prisma stand-in - no PrismaClient involved at
+    // all here, real or mocked, so this can never reach any database file.
+    const update = vi.fn();
+    const alreadyMigratedNote = {
+      id: 'note-1',
+      content: '## Shopping List\n\n- Milk',
+      mode: 'RICH',
+    };
+    const fakePrisma = {
+      note: {
+        findMany: vi.fn().mockResolvedValue([alreadyMigratedNote]),
+        update,
+      },
+    };
+
+    const result = await migrateRichNotes(fakePrisma, { write: true });
+
+    expect(update).not.toHaveBeenCalled();
+    expect(result).toEqual({ converted: 0, skipped: 1, failed: 0, total: 1 });
+  });
+});
+
 describe('runMigration guard rails', () => {
   it('throws when DATABASE_URL is missing', async () => {
     await expect(runMigration({ argv: [], env: {} })).rejects.toThrow('DATABASE_URL is required');
@@ -109,5 +134,21 @@ describe('runMigration guard rails', () => {
     await runMigration({ argv: [], env: { DATABASE_URL: fakeUrl } });
     expect(capturedConfigs).toHaveLength(1);
     expect(capturedConfigs[0]).toEqual({ datasources: { db: { url: fakeUrl } } });
+  });
+
+  it('hard-stops --write against a file DATABASE_URL with nothing to back up (Fix 6b)', async () => {
+    // createBackupIfExists does a real (but harmless, read-only) fs.access
+    // against this path - it's guaranteed not to exist, so nothing is ever
+    // read or copied, and PrismaClient (mocked module-wide above) is never
+    // even constructed because the throw happens before that line.
+    capturedConfigs.length = 0;
+    const fakeUrl = 'file:./this-file-does-not-exist-anywhere-12345.db';
+    await expect(
+      runMigration({ argv: ['--write'], env: { DATABASE_URL: fakeUrl } }),
+    ).rejects.toThrow('Verify DATABASE_URL');
+    // Proves migrateRichNotes was never reached: PrismaClient is constructed
+    // immediately before migrateRichNotes is called, so zero constructions
+    // means the note loop never ran.
+    expect(capturedConfigs).toHaveLength(0);
   });
 });
