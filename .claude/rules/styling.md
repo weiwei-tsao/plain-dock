@@ -4,7 +4,7 @@
 
 - Tailwind CSS v4 via PostCSS plugin (`@tailwindcss/postcss`) — not CDN, not `tailwind.config`.
 - Imported as `@import "tailwindcss"` in `src/app/globals.css`.
-- Custom styles (scrollbar, ProseMirror/Tiptap) also live in `globals.css`.
+- Custom styles (scrollbar, CodeMirror) also live in `globals.css`.
 
 ## Color Palette (Dark Theme Only)
 
@@ -53,10 +53,10 @@ No light mode — dark theme throughout.
 - PLAIN mode editor: `font-mono text-sm text-zinc-400 leading-relaxed`
 - Note titles: `text-xl font-medium text-zinc-100`
 
-## Tiptap / ProseMirror Styles
+## CodeMirror Styles
 
-- All ProseMirror styles live in `src/app/globals.css` — not inline or in component files.
-- Editor content area uses `prose prose-invert max-w-none` Tailwind typography classes.
+- All CodeMirror editor styles live in `src/app/globals.css` — not inline or in component files.
+- Editor content area uses Markdown syntax highlighting with custom color overrides.
 - Inline code: `#a78bfa` (purple) on `#1a1a1a` background.
 - Code blocks: `#0f0f0f` background, monospace.
 - Blockquotes: `border-left: 3px solid #3f3f46`, italic, `#a1a1aa` text.

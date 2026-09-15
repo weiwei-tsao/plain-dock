@@ -52,7 +52,7 @@ type(scope): description
 
 ### Scopes (this project)
 
-`api` · `auth` · `db` · `editor` · `sidebar` · `sanitizer` · `docker` · `config` · `ui` · `responsive`
+`api` · `auth` · `db` · `editor` · `sidebar` · `markdown` · `docker` · `config` · `ui` · `responsive`
 
 ### Description rules
 

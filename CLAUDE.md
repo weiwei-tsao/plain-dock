@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is PlainDock
 
-PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (semantic HTML via Tiptap) mode. Pasted HTML content goes through a 3-layer sanitization pipeline (security stripping → tag normalization → structure downgrade). Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
+PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (Markdown source with syntax highlighting via CodeMirror) mode — both store the same canonical Markdown/plain-text `content`; `mode` only selects the editor. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
 
 ## Development Commands
 
@@ -53,11 +53,11 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 
 ## Architecture
 
-**Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite/libSQL, Tailwind CSS v4 (PostCSS plugin), Tiptap rich text editor, Lucide icons. Docker-ready with standalone output; Vercel-ready with Turso.
+**Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite/libSQL, Tailwind CSS v4 (PostCSS plugin), CodeMirror 6 editor, Lucide icons. Docker-ready with standalone output; Vercel-ready with Turso.
 
 **Path alias:** `@/*` maps to `./src/*`.
 
-**Detailed conventions** are in `.claude/rules/` (api, auth, components, database, docker, git, nextjs, sanitizer, styling) — these are auto-loaded by Claude Code and cover patterns not repeated here.
+**Detailed conventions** are in `.claude/rules/` (api, auth, components, database, docker, git, markdown, nextjs, styling) — these are auto-loaded by Claude Code and cover patterns not repeated here.
 
 **Available skills** — invoke with `/skill-name`:
 
@@ -68,7 +68,6 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 | `/add-note-field` | Add a new field to the Note model across all 6 affected files |
 | `/new-api-route` | Scaffold a new API route with all project conventions and boilerplate |
 | `/deploy` | Pre-deploy quality gate + Docker build and container launch |
-| `/extend-sanitizer` | Add allowed tags, dangerous tags, CSS properties, or tag normalizations to the sanitizer |
 | `/create-pr` | Draft a PR title (≤ 12 words) and description (≤ 60 words) against a specified target branch |
 
 ### Server-side
@@ -90,8 +89,9 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 - `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `folders`, `activeFolderId`, pane-layout state (`folderWidth`, `notesWidth`, `folderCollapsed`, `viewportTier`), and mobile-nav state (`mobilePanel: 'list' | 'editor'`, `showFolders`). `mobilePanel` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. `showFolders` layers a full-screen Folders step on top of that stack on phones.
 - `src/app/login/page.tsx` — Login form, calls `/api/auth/login`, redirects to `/` on success.
 - `src/lib/api-client.ts` — Typed fetch wrapper (`noteApi`) for all `/api/notes` endpoints.
-- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: Tiptap for RICH, `<textarea>` for PLAIN. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Handles paste sanitization, mode switching, pin toggle, clipboard copy (plain + rich HTML). Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
-- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for Tiptap. Horizontally scrollable single row on phone; wraps on tablet/desktop.
+- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: CodeMirror-based `MarkdownEditor` for RICH, `<textarea>` for PLAIN — both store the same canonical Markdown/plain-text `content`. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Paste is always plain text (clipboard HTML is ignored); mode switching is lossless. Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
+- `src/components/editor/MarkdownEditor.tsx` — CodeMirror 6 wrapper for RICH mode: Markdown syntax highlighting, search highlighting, and an imperative handle (`getSelection`, `applyFormatting`, `insertAtCursor`) used by `RichToolbar` and image paste.
+- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for RICH mode, built on pure functions from `src/lib/markdown/formatting.ts` (not a rich-text editor API). Horizontally scrollable single row on phone; wraps on tablet/desktop.
 - `src/components/sidebar/FolderSidebar.tsx` — Folder list ("All Notes" + folders with counts) with inline create/rename/delete. `variant: 'pane' | 'mobile-fullscreen'` — pane mode renders inline with its own resizable width and edge toggle chevron; mobile-fullscreen mode renders full width with a header back button.
 - `src/components/sidebar/NotesList.tsx` — Search filtering, pull-to-refresh, and the note list with pin indicators. Owns the folder-toggle button that opens `FolderSidebar` (as an overlay on tablet, full-screen on mobile).
 - `src/components/sidebar/ResizeHandle.tsx` — Thin draggable divider between panes; reports `deltaX` via `onResize` as the user drags.
@@ -106,16 +106,15 @@ Three-pane (Folder Sidebar | Notes List | Editor) layout driven by JS viewport-t
 | Tablet  | 768–1023px | Two-pane (Notes List + Editor); Folder Sidebar auto-collapses to an overlay opened via toggle |
 | Desktop | 1024px+    | Three-pane, all resizable; Folder Sidebar can be manually collapsed    |
 
-See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. No centralized theme or CSS variables — colors are inline Tailwind classes. ProseMirror/Tiptap styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
+See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. No centralized theme or CSS variables — colors are inline Tailwind classes. CodeMirror editor styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
 
-### Sanitizer (`src/lib/sanitizer/`)
+### Markdown (`src/lib/markdown/`)
 
-Client-side 3-layer HTML sanitization pipeline for pasted content:
-1. **Security** (`config.ts` → `DANGEROUS_TAGS`): strips `script`, `style`, `iframe`, `object`, `meta`
-2. **Normalization** (`normalize.ts` → `TAG_NORMALIZE_MAP`): `div→p`, `b→strong`, `i→em`
-3. **Structure downgrade**: tables→tab-separated `<p>`, media→`[TAG: src]` placeholders
-
-Allowlisted tags and styles defined in `config.ts`.
+Pure, framework-independent text functions shared by both editor modes:
+`terminal-table.ts` (paste-time table/code detection), `text-projection.ts`
+(`markdownToPlainText` for `Note.textContent`), `formatting.ts` (toolbar
+actions), `find-matches.ts` (search highlighting). See
+`.claude/rules/markdown.md`.
 
 ## Running the App
 

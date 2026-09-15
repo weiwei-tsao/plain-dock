@@ -7,14 +7,14 @@ type(scope): description
 ```
 
 - **type**: `feat`, `fix`, `refactor`, `docs`, `style`, `chore`, `test`
-- **scope**: matches project areas — `api`, `auth`, `db`, `editor`, `sidebar`, `sanitizer`, `docker`, `config`
+- **scope**: matches project areas — `api`, `auth`, `db`, `editor`, `sidebar`, `markdown`, `docker`, `config`
 - **description**: imperative mood, lowercase, no period at end, **≤ 12 words**
 
 Examples:
 ```
 feat(api): add note export endpoint
 fix(editor): prevent race condition on rapid saves
-refactor(sanitizer): extract tag normalization to separate module
+refactor(markdown): extract table detection to separate module
 docs(config): update env variable documentation
 style(sidebar): adjust search input border radius
 chore(db): add prisma migration for tags field

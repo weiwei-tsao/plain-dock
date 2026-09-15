@@ -12,7 +12,7 @@ Ask the user for:
 1. **Error message or symptom** — exact text, console error, or screenshot description
 2. **Reproduction steps** — what actions trigger it
 3. **Mode** — PLAIN or RICH, or both
-4. **Suspected area** — editor, sidebar, API, sanitizer, auth, or unknown
+4. **Suspected area** — editor, sidebar, API, markdown, auth, or unknown
 
 If the user already provided some of this, skip asking for what's already known.
 
@@ -36,16 +36,16 @@ User interaction (page.tsx state: notes, activeNoteId, mobilePanel)
   → Component state update → re-render
 ```
 
-**Paste / sanitizer path:**
+**Paste / markdown path:**
 ```
 Paste event (EditorCanvas.tsx handlePaste / textarea onPaste)
-  → clipboard image → resizeImageToDataURL() → insertContentAt()
-  → clipboard HTML  → sanitizeHTML() (src/lib/sanitizer/index.ts)
-      Layer 1: strip DANGEROUS_TAGS (config.ts)
-      Layer 2: TAG_NORMALIZE_MAP (normalize.ts)
-      Layer 3: table/media downgrade
-  → clipboard text  → wrapPlainText()
-  → editor.commands.insertContent() / setPlainContent()
+  → clipboard image → image data converted to markdown (handled by MarkdownEditor)
+  → clipboard HTML  → ignored; only plain text extracted
+  → clipboard text  → detectTerminalTable() (src/lib/markdown/terminal-table.ts)
+      → table detected? → convert to Markdown table
+      → code-like text? → wrap in fenced code block
+      → plain text → insert as-is
+  → MarkdownEditor.insertAtCursor() or textarea appendChild()
   → triggerSave() debounce → persistChange() → noteApi.update()
 ```
 
@@ -130,18 +130,18 @@ If Prettier fails, run `npx prettier --write src/` then re-check. Report results
 
 - **Stale `note` closure in `useEditor`** — `handlePaste` / `onUpdate` capture `note` at mount and never update. Use `syncedNoteIdRef.current` (not `note.id`) to get the current note identity inside async callbacks.
 - **`currentModeRef` before the early-return guard** — the note-sync effect has an early return when note ID hasn't changed; `currentModeRef.current = note.mode` must come BEFORE that guard or mode-only changes won't update the ref.
-- **Image base64 round-trip** — Tiptap's Image extension does not accept `data:` URLs by default; `allowBase64: true` must be set or images disappear on `setContent()`.
+- **Image markdown in RICH mode** — Pasted images are inserted as Markdown image syntax (`![alt](src)`); CodeMirror's text rendering shows syntax highlighting but not the actual image.
 - **`insertContentAt` vs `setImage`** — `setImage` always uses the live selection; for async inserts, capture `view.state.selection.from` synchronously and use `insertContentAt(pos, ...)`.
 - **`overflow-hidden` clips absolutely-positioned children** — sidebar toggle button at `-right-3` is clipped when the aside has both `w-0` and `overflow-hidden`. Move `overflow-hidden` to the inner content div only.
 - **`nodeToText` leaf nodes** — `hardBreak` has no `content` array and hits the `return ''` branch; it must be handled explicitly as `'\n'` before the empty-content guard.
 - **`params` is a Promise in Next.js 16** — `const { id } = await params`, not `params.id` directly.
-- **Sanitizer layer order matters** — normalization (Layer 2) runs before structure downgrade (Layer 3); adding a tag to `ALLOWED_TAGS` without considering the downgrade layer may still strip it.
+- **Markdown content invariant** — `Note.content` is the same Markdown/plain-text for both PLAIN and RICH modes; `mode` only selects the editor. Never assume RICH-mode content is HTML.
 
 ---
 
 **Architecture reference**: `CLAUDE.md` and `.claude/rules/`
 **API conventions**: `.claude/rules/api.md`
-**Sanitizer rules**: `.claude/rules/sanitizer.md`
+**Markdown rules**: `.claude/rules/markdown.md`
 **Styling conventions**: `.claude/rules/styling.md`
 **Shared types**: `src/types.ts`
-**Sanitizer config**: `src/lib/sanitizer/config.ts`
+**Markdown utilities**: `src/lib/markdown/`
