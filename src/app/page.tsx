@@ -373,9 +373,9 @@ export default function MainPage() {
     setNoteLoadAttempt((attempt) => attempt + 1);
   }, []);
 
-  // Cmd/Ctrl+K focuses search. Tiptap's extensions (StarterKit, Underline,
-  // Image, Table*, Link, CodeBlockLowlight) don't bind this shortcut, so no
-  // conflict with the editor.
+  // Cmd/Ctrl+K focuses search. Neither the CodeMirror MarkdownEditor (RICH)
+  // nor the plain <textarea> (PLAIN) bind this shortcut, so no conflict with
+  // the editor.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;

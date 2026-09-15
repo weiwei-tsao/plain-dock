@@ -45,7 +45,8 @@ Paste event (EditorCanvas.tsx handlePaste / textarea onPaste)
       → table detected? → convert to Markdown table
       → code-like text? → wrap in fenced code block
       → plain text → insert as-is
-  → MarkdownEditor.insertAtCursor() or textarea appendChild()
+  → MarkdownEditor.insertAtCursor() (RICH) or a string splice on the
+    textarea's value via setContent() (PLAIN) — not a DOM append
   → triggerSave() debounce → persistChange() → noteApi.update()
 ```
 
@@ -106,7 +107,7 @@ Checklist before marking done:
 - [ ] No new `any` types introduced unless unavoidable (cast with a local type instead)
 - [ ] `serializeNote()` called before returning any Prisma note to the client
 - [ ] New API routes follow conventions: `await params`, `NextResponse.json()`, correct status codes
-- [ ] Sanitizer changes go through the 3-layer pipeline — do not bypass layers
+- [ ] Markdown content invariant preserved — `Note.content` stays the same Markdown/plain-text string across PLAIN and RICH; don't reintroduce HTML or mode-conditional storage
 - [ ] Image paste guards: check `syncedNoteIdRef` and `currentModeRef` for async operations
 - [ ] No `server-only` modules imported from client components
 
@@ -131,9 +132,7 @@ If Prettier fails, run `npx prettier --write src/` then re-check. Report results
 - **Stale `note` closure in `useEditor`** — `handlePaste` / `onUpdate` capture `note` at mount and never update. Use `syncedNoteIdRef.current` (not `note.id`) to get the current note identity inside async callbacks.
 - **`currentModeRef` before the early-return guard** — the note-sync effect has an early return when note ID hasn't changed; `currentModeRef.current = note.mode` must come BEFORE that guard or mode-only changes won't update the ref.
 - **Image markdown in RICH mode** — Pasted images are inserted as Markdown image syntax (`![alt](src)`); CodeMirror's text rendering shows syntax highlighting but not the actual image.
-- **`insertContentAt` vs `setImage`** — `setImage` always uses the live selection; for async inserts, capture `view.state.selection.from` synchronously and use `insertContentAt(pos, ...)`.
 - **`overflow-hidden` clips absolutely-positioned children** — sidebar toggle button at `-right-3` is clipped when the aside has both `w-0` and `overflow-hidden`. Move `overflow-hidden` to the inner content div only.
-- **`nodeToText` leaf nodes** — `hardBreak` has no `content` array and hits the `return ''` branch; it must be handled explicitly as `'\n'` before the empty-content guard.
 - **`params` is a Promise in Next.js 16** — `const { id } = await params`, not `params.id` directly.
 - **Markdown content invariant** — `Note.content` is the same Markdown/plain-text for both PLAIN and RICH modes; `mode` only selects the editor. Never assume RICH-mode content is HTML.
 

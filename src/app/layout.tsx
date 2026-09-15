@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'PlainDock',
-  description: 'Minimalist dual-mode text sanitizer and note-taking app',
+  description: 'Minimalist dual-mode note-taking app',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
