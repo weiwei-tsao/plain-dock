@@ -36,6 +36,16 @@ describe('htmlToMarkdown', () => {
   it('converts a code block', () => {
     expect(htmlToMarkdown('<pre><code>const x = 1;</code></pre>')).toBe('```\nconst x = 1;\n```');
   });
+
+  it('keeps multi-paragraph blockquote paragraphs separated', () => {
+    const html = '<blockquote><p>First paragraph.</p><p>Second paragraph.</p></blockquote>';
+    expect(htmlToMarkdown(html)).toBe('> First paragraph.\n>\n> Second paragraph.');
+  });
+
+  it('keeps nested list items structured under their parent item', () => {
+    const html = '<ul><li>Item one<ul><li>Nested item</li></ul></li></ul>';
+    expect(htmlToMarkdown(html)).toBe('- Item one\n  - Nested item');
+  });
 });
 
 describe('markdownToPlainTextForMigration', () => {

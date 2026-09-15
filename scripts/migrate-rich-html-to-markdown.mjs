@@ -46,26 +46,40 @@ function block(node) {
       const level = Number(tag[1]);
       return `${'#'.repeat(level)} ${inline(el)}\n\n`;
     }
-    case 'blockquote':
+    case 'blockquote': {
+      const inner = Array.from(el.childNodes)
+        .map((child) => (child.nodeType === 1 ? block(child) : inline(child)))
+        .join('');
       return (
-        inline(el)
+        inner
           .trim()
           .split('\n')
-          .map((line) => `> ${line}`)
+          .map((line) => (line === '' ? '>' : `> ${line}`))
           .join('\n') + '\n\n'
       );
+    }
     case 'ul':
-      return (
-        Array.from(el.children)
-          .map((li) => `- ${inline(li).trim()}`)
-          .join('\n') + '\n\n'
-      );
-    case 'ol':
-      return (
-        Array.from(el.children)
-          .map((li, i) => `${i + 1}. ${inline(li).trim()}`)
-          .join('\n') + '\n\n'
-      );
+    case 'ol': {
+      const items = Array.from(el.children).map((li, i) => {
+        const nested = Array.from(li.children).find((c) =>
+          ['ul', 'ol'].includes(c.tagName?.toLowerCase()),
+        );
+        const ownText = Array.from(li.childNodes)
+          .filter((c) => c !== nested)
+          .map((c) => inline(c))
+          .join('')
+          .trim();
+        const prefix = tag === 'ul' ? '- ' : `${i + 1}. `;
+        if (!nested) return `${prefix}${ownText}`;
+        const nestedMd = block(nested)
+          .trim()
+          .split('\n')
+          .map((l) => `  ${l}`)
+          .join('\n');
+        return `${prefix}${ownText}\n${nestedMd}`;
+      });
+      return items.join('\n') + '\n\n';
+    }
     case 'pre':
       return '```\n' + (el.textContent ?? '') + '\n```\n\n';
     case 'hr':
