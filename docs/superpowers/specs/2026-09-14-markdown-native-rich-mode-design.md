@@ -90,8 +90,9 @@ PLAIN mode's `<textarea>` is untouched.
 
 ## Mode switching
 
-Because both modes share the same text, `handleSwitchMode` becomes a copy
-with no conversion:
+Both editors read and write the same canonical `content`; switching mode
+changes only the active editor presentation — there is no copy or
+conversion step:
 
 - Delete `nodeToText`, `nodeToMarkdown`, `applyMarks`, `BLOCK_NODE_TYPES`
   (EditorCanvas.tsx:91–174).
@@ -138,10 +139,20 @@ change (attachment storage is explicitly out of scope for this project).
 
 Reduced to what makes sense without a rendered view (no Live Preview in
 v1): bold, italic, strikethrough, inline code, H1, H2, bullet list, ordered
-list, blockquote, fenced code block, clear formatting. **Underline is
-dropped in v1** — inserting bare `<u></u>` tags with zero visual feedback in
-a non-rendering editor reads as broken; it comes back when Live Preview (v2)
-can actually render it.
+list, blockquote, fenced code block. **Underline and Clear Formatting are
+both dropped in v1**, for related reasons:
+
+- Underline: inserting bare `<u></u>` tags with zero visual feedback in a
+  non-rendering editor reads as broken; it comes back when Live Preview
+  (v2) can actually render it.
+- Clear Formatting: on a structured ProseMirror selection, "clear
+  formatting" is well-defined (`unsetAllMarks()`). On a raw text selection
+  it isn't — `markdownToPlainText("hello")` does nothing if the user
+  selected only the word inside `**hello**`, and a partial selection like
+  `**hel` has no clean semantics without reaching outside the selection to
+  find the matching marker. Rather than ship a rule that only "sort of"
+  clears formatting depending on exactly what's selected, it's dropped
+  until there's a concrete need for it.
 
 Toolbar logic becomes pure functions, decoupled from any CodeMirror
 transaction API, taking/returning `(text, selectionStart, selectionEnd)`:
@@ -150,12 +161,7 @@ transaction API, taking/returning `(text, selectionStart, selectionEnd)`:
 toggleInlineMark(text, sel, marker)      // ** _ ~~ `
 toggleLinePrefix(text, sel, prefix)      // # ## - 1. >
 toggleCodeBlock(text, sel)
-clearMarkdownFormatting(text, sel)       // = markdownToPlainText(selectedText)
 ```
-
-`clearMarkdownFormatting` has no separate rule set — it reuses
-`markdownToPlainText` (the same function backing `textContent`) applied to
-the selection. One stripping implementation, two call sites.
 
 `MarkdownEditor.tsx` translates these pure-function results into CodeMirror
 transactions; `RichToolbar.tsx` never touches CodeMirror directly.
@@ -164,9 +170,10 @@ transactions; `RichToolbar.tsx` never touches CodeMirror directly.
 
 The custom Tiptap `SearchHighlight` extension (ProseMirror decorations +
 `getFirstMatchPos` + manual `domAtPos`/`scrollIntoView`) is replaced by a
-CodeMirror `ViewPlugin` doing the same two things: decorate all matches of
-`searchQuery`, and scroll to the first match on note open. This is a
-straightforward port — no behavior change.
+CodeMirror `ViewPlugin` doing the same thing: highlight all matches and jump
+to the first match when `searchQuery` or the active note changes, without
+re-jumping on ordinary document edits. This is a straightforward port — no
+behavior change.
 
 ## Export / Copy
 
@@ -192,14 +199,32 @@ Existing RICH notes have HTML in `content`. One-off script,
 ```
 default: --dry-run (no writes)
 --write: perform the migration
-before --write: back up the SQLite file (+ -wal/-shm sidecars where present)
-for each RICH note: HTML → Markdown (constrained to the existing
-  ALLOWED_TAGS set — p, br, hr, blockquote, strong, em, u, s, ul, ol, li,
-  pre, code, h1–h6, a, span, table/thead/tbody/tr/th/td), parsed with jsdom
-  (already a devDependency)
+for each RICH note: HTML → Markdown, parsed with jsdom (already a
+  devDependency)
 recompute textContent via the new markdownToPlainText() for consistency
 output: converted / skipped / failed counts
 ```
+
+**Conversion scope is the actual RICH storage schema, not the sanitizer's
+`ALLOWED_TAGS` allowlist.** Those are not the same set: `Image.configure({
+allowBase64: true })` lets the editor insert an image node directly (via
+the clipboard-image paste branch, which never goes through
+`sanitizeHTML`), and `onUpdate` saves `ed.getHTML()` straight to `content`
+with no sanitizer pass at save time either. So existing RICH notes can
+legitimately contain `<img src="data:...">` even though `img` was never in
+`ALLOWED_TAGS`. The migration must handle it as an explicit case —
+`<img src="..." alt="...">` → `![alt](src)`, base64 data URIs preserved
+as-is — or it silently drops images on conversion.
+
+Backup differs by environment and must not be described as one mechanism:
+
+- **Local dev / Docker (file SQLite):** before `--write`, copy the database
+  file plus its `-wal`/`-shm` sidecars where present — the same convention
+  `sync-turso-to-docker.mjs` already uses.
+- **Turso (remote libSQL):** there is no local file to copy. Before running
+  `--write` against a `libsql://`/Turso `DATABASE_URL`, require an
+  independent backup — e.g. `turso db shell <database> .dump > backup.sql`
+  — and treat its absence as a hard stop, not a warning.
 
 Not designed as idempotent or safe to run repeatedly against live traffic —
 it's a one-time cutover, run once per environment (local dev SQLite,
@@ -211,10 +236,14 @@ marker/versioning is needed for a script with this lifecycle.
 
 - `src/lib/markdown/text-projection.test.ts` — `markdownToPlainText()`
 - `src/lib/markdown/formatting.test.ts` — `toggleInlineMark`,
-  `toggleLinePrefix`, `toggleCodeBlock`, `clearMarkdownFormatting`
+  `toggleLinePrefix`, `toggleCodeBlock`
 - `src/lib/markdown/terminal-table.test.ts` — moved from
   `sanitizer/terminalTable.test.mjs`, unchanged
 - Delete `src/lib/sanitizer/index.test.ts` (tests the deleted HTML pipeline)
+- Migration script conversion function: fixture-based tests covering each
+  `ALLOWED_TAGS` element plus the `<img>` special case (including a
+  base64 `data:` src), since that function is the one place this refactor
+  touches real user data
 - Playwright e2e (`e2e/`): RICH-mode specs currently assume ProseMirror DOM
   structure and must be updated for CodeMirror's DOM — typing, autosave,
   search highlight, toolbar, paste (terminal table, image), mode switch
