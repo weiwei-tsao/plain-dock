@@ -12,6 +12,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "docker:sync-from-turso": "node scripts/sync-turso-to-docker.mjs",
+    "migrate:rich-html-to-markdown": "node scripts/migrate-rich-html-to-markdown.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

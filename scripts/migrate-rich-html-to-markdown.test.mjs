@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   htmlToMarkdown,
   markdownToPlainTextForMigration,
+  runMigration,
 } from './migrate-rich-html-to-markdown.mjs';
 import { markdownToPlainText } from '../src/lib/markdown/text-projection.ts';
 
@@ -58,5 +59,17 @@ describe('markdownToPlainTextForMigration', () => {
     for (const sample of samples) {
       expect(markdownToPlainTextForMigration(sample)).toBe(markdownToPlainText(sample));
     }
+  });
+});
+
+describe('runMigration guard rails', () => {
+  it('throws when DATABASE_URL is missing', async () => {
+    await expect(runMigration({ argv: [], env: {} })).rejects.toThrow('DATABASE_URL is required');
+  });
+
+  it('refuses --write against Turso without --turso-backup-confirmed', async () => {
+    await expect(
+      runMigration({ argv: ['--write'], env: { DATABASE_URL: 'libsql://example.turso.io' } }),
+    ).rejects.toThrow('--turso-backup-confirmed');
   });
 });
