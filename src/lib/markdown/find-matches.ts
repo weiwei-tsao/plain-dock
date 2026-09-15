@@ -1,4 +1,4 @@
-import { indexOfCI } from '../search-highlight';
+import { indexOfCI } from '@/lib/search-highlight';
 
 export interface MatchRange {
   from: number;
