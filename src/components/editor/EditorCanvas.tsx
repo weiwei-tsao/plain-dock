@@ -159,8 +159,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     setLocalTitle(note.title);
     setSaveState('IDLE');
     if (autoFocus) {
-      // MarkdownEditor/textarea focus is handled by their own autoFocus prop
-      // once note.id changes remount them (MarkdownEditor is keyed by note.id).
+      // RICH mode's focus is handled by MarkdownEditor's own autoFocus prop
+      // (it remounts per note.id). The textarea isn't remounted, so PLAIN
+      // mode needs an explicit focus call here.
+      if (note.mode === NoteMode.PLAIN) {
+        textareaRef.current?.focus();
+      }
       onAutoFocusHandled?.();
     }
   }, [note.id, note.title, note.content, note.mode, autoFocus, onAutoFocusHandled]);
@@ -287,6 +291,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   };
 
   const handleSwitchMode = () => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     const newMode = note.mode === NoteMode.RICH ? NoteMode.PLAIN : NoteMode.RICH;
     const textContent = newMode === NoteMode.RICH ? markdownToPlainText(content) : content;
     persistChange({ mode: newMode, content, textContent }, { showProgressAndSuccess: false });
