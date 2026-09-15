@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
-import { detectTerminalTable } from './terminalTable.ts';
+import { detectTerminalTable } from './terminal-table';
 
 test('detects a Unicode box-drawing table', () => {
   const input = [
@@ -17,9 +17,7 @@ test('detects a Unicode box-drawing table', () => {
   assert.equal(result.type, 'table');
   assert.equal(
     result.markdown,
-    ['| Repo | Status |', '| --- | --- |', '| pub-api | clean |', '| pub-web | dirty |'].join(
-      '\n',
-    ),
+    ['| Repo | Status |', '| --- | --- |', '| pub-api | clean |', '| pub-web | dirty |'].join('\n'),
   );
 });
 
@@ -37,9 +35,7 @@ test('detects a double-line Unicode box-drawing table', () => {
   assert.equal(result.type, 'table');
   assert.equal(
     result.markdown,
-    ['| Repo | Status |', '| --- | --- |', '| pub-api | clean |', '| pub-web | dirty |'].join(
-      '\n',
-    ),
+    ['| Repo | Status |', '| --- | --- |', '| pub-api | clean |', '| pub-web | dirty |'].join('\n'),
   );
 });
 
@@ -54,7 +50,10 @@ test('detects an ASCII grid table', () => {
 
   const result = detectTerminalTable(input);
   assert.equal(result.type, 'table');
-  assert.equal(result.markdown, ['| Repo | Status |', '| --- | --- |', '| api | clean |'].join('\n'));
+  assert.equal(
+    result.markdown,
+    ['| Repo | Status |', '| --- | --- |', '| api | clean |'].join('\n'),
+  );
 });
 
 test('escapes literal pipe characters inside box-drawing cell text', () => {
@@ -97,18 +96,4 @@ test('returns none for plain prose', () => {
 test('returns none for empty input', () => {
   assert.deepEqual(detectTerminalTable(''), { type: 'none' });
   assert.deepEqual(detectTerminalTable('   \n  \n'), { type: 'none' });
-});
-
-test('generated markdown renders as a real table', async () => {
-  const { markdownToHtml } = await import('./markdown.ts');
-  const input = [
-    '┌──────┬──────────┐',
-    '│ Repo │ Status   │',
-    '├──────┼──────────┤',
-    '│ api  │ clean    │',
-    '└──────┴──────────┘',
-  ].join('\n');
-  const result = detectTerminalTable(input);
-  assert.equal(result.type, 'table');
-  assert.match(markdownToHtml(result.markdown), /<table>/);
 });

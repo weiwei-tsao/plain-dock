@@ -35,8 +35,7 @@
 
 - **Cross-cutting constants** → `src/lib/constants.ts` (safe for all runtimes: Edge, Node, client)
   - Currently: `COOKIE_NAME`, `MAX_AGE`
-- **Feature-scoped constants** → in the relevant feature's config file
-  - Sanitizer: `src/lib/sanitizer/config.ts` (`ALLOWED_TAGS`, `DANGEROUS_TAGS`, etc.)
+- **Feature-scoped constants** → in the relevant feature's own file, if one exists
 - New constants: place in `constants.ts` if used across features, otherwise in the feature's own config.
 
 ## Code Quality Tooling

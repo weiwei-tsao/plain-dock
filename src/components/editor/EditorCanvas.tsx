@@ -9,30 +9,19 @@ import React, {
   useImperativeHandle,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import Image from '@tiptap/extension-image';
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableHeader from '@tiptap/extension-table-header';
-import TableCell from '@tiptap/extension-table-cell';
-import Link from '@tiptap/extension-link';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { createLowlight, common } from 'lowlight';
 import type { Folder, Note, NotePayload } from '@/types';
 import { NoteMode, type SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
+import { detectTerminalTable } from '@/lib/markdown/terminal-table';
+import { markdownToPlainText } from '@/lib/markdown/text-projection';
 import {
-  sanitizeHTML,
-  collapseEmptyParagraphs,
-  markdownToHtml,
-  detectTerminalTable,
-  wrapPlainText,
-  getNoteTextContent,
-} from '@/lib/sanitizer';
+  toggleInlineMark,
+  toggleLinePrefix,
+  wrapCodeBlock,
+  type FormattingResult,
+} from '@/lib/markdown/formatting';
+import MarkdownEditor, { type MarkdownEditorHandle } from './MarkdownEditor';
 import RichToolbar from './RichToolbar';
-import SearchHighlight, { getFirstMatchPos } from './SearchHighlight';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
 import {
@@ -76,104 +65,6 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
     img.src = objectUrl;
   });
 }
-
-function textToCleanHtml(text: string): string {
-  const detection = detectTerminalTable(text);
-  const markdownSource =
-    detection.type === 'table'
-      ? detection.markdown
-      : detection.type === 'code'
-        ? '```text\n' + text + '\n```'
-        : text;
-  return sanitizeHTML(markdownToHtml(markdownSource));
-}
-
-type TiptapMark = { type: string; attrs?: Record<string, unknown> };
-
-type TiptapNode = {
-  type?: string;
-  text?: string;
-  content?: TiptapNode[];
-  attrs?: Record<string, unknown>;
-  marks?: TiptapMark[];
-};
-const BLOCK_NODE_TYPES = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock']);
-
-function nodeToText(node: TiptapNode): string {
-  if (node.type === 'image') {
-    const alt = node.attrs?.alt as string | undefined;
-    return `[image: ${alt || 'embedded-image.webp'}]`;
-  }
-  if (node.type === 'text') return node.text ?? '';
-  if (node.type === 'hardBreak') return '\n';
-  if (!node.content?.length) return '';
-  const inner = node.content.map(nodeToText).join('');
-  return BLOCK_NODE_TYPES.has(node.type ?? '') ? inner + '\n' : inner;
-}
-
-function applyMarks(text: string, marks: TiptapMark[] = []): string {
-  const wrappers: Array<[string, (s: string) => string]> = [
-    ['code', (s) => `\`${s}\``],
-    ['strike', (s) => `~~${s}~~`],
-    ['italic', (s) => `_${s}_`],
-    ['bold', (s) => `**${s}**`],
-    ['underline', (s) => `<u>${s}</u>`],
-  ];
-  let result = text;
-  for (const [type, wrap] of wrappers) {
-    if (marks.some((m) => m.type === type)) result = wrap(result);
-  }
-  const link = marks.find((m) => m.type === 'link');
-  const href = link?.attrs?.href;
-  if (typeof href === 'string') {
-    result = `[${result}](${href})`;
-  }
-  return result;
-}
-
-function nodeToMarkdown(node: TiptapNode): string {
-  if (node.type === 'image') {
-    const alt = node.attrs?.alt as string | undefined;
-    return `[image: ${alt || 'embedded-image.webp'}]`;
-  }
-  if (node.type === 'text') return applyMarks(node.text ?? '', node.marks);
-  if (node.type === 'hardBreak') return '\n';
-
-  const inner = (node.content ?? []).map(nodeToMarkdown);
-
-  switch (node.type) {
-    case 'heading': {
-      const level = (node.attrs?.level as number | undefined) ?? 1;
-      return `${'#'.repeat(level)} ${inner.join('')}\n\n`;
-    }
-    case 'paragraph':
-      return `${inner.join('')}\n\n`;
-    case 'codeBlock':
-      return `\`\`\`\n${inner.join('')}\n\`\`\`\n\n`;
-    case 'blockquote':
-      return (
-        inner
-          .join('')
-          .trimEnd()
-          .split('\n')
-          .map((line) => `> ${line}`)
-          .join('\n') + '\n\n'
-      );
-    case 'bulletList':
-      return (node.content ?? []).map((li) => `- ${nodeToMarkdown(li).trim()}`).join('\n') + '\n\n';
-    case 'orderedList':
-      return (
-        (node.content ?? []).map((li, i) => `${i + 1}. ${nodeToMarkdown(li).trim()}`).join('\n') +
-        '\n\n'
-      );
-    case 'listItem':
-      return inner.join('');
-    default:
-      return inner.join('');
-  }
-}
-
-const lowlight = createLowlight(common);
 
 function sanitizeFilename(title: string): string {
   const cleaned = title.trim().replace(/[\\/:*?"<>|]/g, '-');
@@ -229,10 +120,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 ) {
   const [saveState, setSaveState] = useState<SaveState>('IDLE');
   const [localTitle, setLocalTitle] = useState(note.title);
-  const [plainContent, setPlainContent] = useState(note.content);
+  const [content, setContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showModeConfirm, setShowModeConfirm] = useState(false);
-  const [modeConfirmHasImages, setModeConfirmHasImages] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
@@ -252,134 +141,33 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
   const syncedNoteIdRef = useRef<string | null>(null);
-  // Ref so triggerSave always reads current plain content without a stale closure
-  const plainContentRef = useRef(note.content);
+  // Ref so triggerSave always reads current content without a stale closure
+  const contentRef = useRef(note.content);
   const currentModeRef = useRef(note.mode);
+  const markdownEditorRef = useRef<MarkdownEditorHandle>(null);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ codeBlock: false }),
-      CodeBlockLowlight.configure({ lowlight }),
-      Underline,
-      Image.configure({ allowBase64: true }),
-      Table.configure({ resizable: false, renderWrapper: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Link.configure({ openOnClick: false, protocols: ['http', 'https', 'mailto'] }),
-      SearchHighlight,
-    ],
-    content: note.content,
-    editorProps: {
-      attributes: {
-        class: 'prose prose-invert max-w-none focus:outline-none min-h-[400px]',
-      },
-      handlePaste: (view, event) => {
-        if (note.mode === NoteMode.PLAIN || !editor) return false;
-        // Inside a code block, let Tiptap handle paste natively (plain text only)
-        if (editor.isActive('codeBlock')) return false;
-
-        const items = Array.from(event.clipboardData?.items ?? []);
-        const imageItem = items.find((item) => item.type.startsWith('image/'));
-        if (imageItem) {
-          const file = imageItem.getAsFile();
-          if (file) {
-            const pasteNoteId = syncedNoteIdRef.current;
-            const pasteFrom = view.state.selection.from;
-            resizeImageToDataURL(file).then((dataUrl) => {
-              if (syncedNoteIdRef.current !== pasteNoteId) return;
-              if (currentModeRef.current !== NoteMode.RICH) return;
-              const insertPos = Math.min(pasteFrom, editor.state.doc.content.size);
-              editor
-                .chain()
-                .focus()
-                .insertContentAt(insertPos, {
-                  type: 'image',
-                  attrs: { src: dataUrl, alt: file.name },
-                })
-                .run();
-            });
-            return true;
-          }
-        }
-
-        const html = event.clipboardData?.getData('text/html');
-        const text = event.clipboardData?.getData('text/plain');
-
-        if (html && html.trim() !== '') {
-          // HTML is normally the richer representation (links, inline marks,
-          // structure) and wins by default — UNLESS it has no real table of
-          // its own while the plain-text entry resolves to one. That case
-          // means the source's HTML was a lossy per-line dump (common from
-          // VS Code/terminal HTML clipboard exports) while text/plain still
-          // carries a parseable terminal/Markdown table — prefer the table.
-          const htmlHasTable = /<table[\s>]/i.test(html);
-          let clean = sanitizeHTML(html);
-
-          if (!htmlHasTable && text) {
-            const fromText = textToCleanHtml(text);
-            if (/<table[\s>]/i.test(fromText)) clean = fromText;
-          }
-
-          editor.commands.insertContent(collapseEmptyParagraphs(clean));
-          return true;
-        } else if (text) {
-          editor.commands.insertContent(collapseEmptyParagraphs(textToCleanHtml(text)));
-          return true;
-        }
-        return false;
-      },
-    },
-    onUpdate: ({ editor: ed }) => {
-      if (note.mode === NoteMode.RICH) {
-        triggerSave({ content: ed.getHTML() });
-      }
-    },
-  });
-
-  // Sync editor content when switching notes — not on every save round-trip.
-  // note.content changes after each save (onUpdate propagates the server response),
+  // Sync content when switching notes — not on every save round-trip.
+  // note.content changes after each save (persistChange propagates the server response),
   // which would re-run this effect and call setContent, jumping the cursor.
   // The ref guard ensures setContent only fires when the note ID actually changes.
   useEffect(() => {
     currentModeRef.current = note.mode;
     if (syncedNoteIdRef.current === note.id) return;
     syncedNoteIdRef.current = note.id;
-    if (editor) {
-      editor.commands.setContent(note.content, false);
-    }
+    setContent(note.content);
+    contentRef.current = note.content;
     setLocalTitle(note.title);
-    setPlainContent(note.content);
-    plainContentRef.current = note.content;
     setSaveState('IDLE');
     if (autoFocus) {
-      if (note.mode === NoteMode.RICH) {
-        editor?.commands.focus();
-      } else {
+      // RICH mode's focus is handled by MarkdownEditor's own autoFocus prop
+      // (it remounts per note.id). The textarea isn't remounted, so PLAIN
+      // mode needs an explicit focus call here.
+      if (note.mode === NoteMode.PLAIN) {
         textareaRef.current?.focus();
       }
       onAutoFocusHandled?.();
     }
-  }, [note.id, note.title, editor, note.content, note.mode, autoFocus, onAutoFocusHandled]);
-
-  // Highlight search matches in RICH mode and jump to the first one. Keyed on
-  // searchQuery/note.id rather than content, so typing in the note body doesn't
-  // re-trigger the scroll-to-first-match jump (only doc decorations recompute).
-  useEffect(() => {
-    if (!editor || note.mode !== NoteMode.RICH) return;
-    editor.commands.setSearchHighlight(searchQuery);
-    if (!searchQuery) return;
-
-    const firstPos = getFirstMatchPos(editor.state);
-    if (firstPos !== null) {
-      editor.commands.setTextSelection(firstPos);
-      // +1 lands strictly inside the decorated match span rather than on its
-      // boundary, where domAtPos can resolve to the node just before it.
-      let matchNode = editor.view.domAtPos(firstPos + 1).node;
-      if (matchNode.nodeType === Node.TEXT_NODE) matchNode = matchNode.parentElement as Node;
-      (matchNode as HTMLElement)?.scrollIntoView?.({ block: 'center' });
-    }
-  }, [searchQuery, note.id, note.mode, editor]);
+  }, [note.id, note.title, note.content, note.mode, autoFocus, onAutoFocusHandled]);
 
   // Auto-resize textarea to match content height
   useEffect(() => {
@@ -388,7 +176,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       ta.style.height = 'auto';
       ta.style.height = `${ta.scrollHeight}px`;
     }
-  }, [plainContent, note.mode]);
+  }, [content, note.mode]);
 
   const persistChange = useCallback(
     (payload: Partial<NotePayload>, options: { showProgressAndSuccess?: boolean } = {}) => {
@@ -422,35 +210,69 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     (updates: Partial<NotePayload>) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
-        const content =
-          updates.content ??
-          (note.mode === NoteMode.RICH ? editor?.getHTML() : plainContentRef.current) ??
-          '';
+        const newContent = updates.content ?? contentRef.current;
+        const mode = updates.mode ?? note.mode;
+        // Always the stripped projection — content is canonical Markdown in both
+        // modes now, so this is the correct searchable/display representation
+        // regardless of which mode the note is currently in (see Fix 2).
+        const textContent = markdownToPlainText(newContent);
         const payload: NotePayload = {
           title: updates.title ?? localTitle,
-          content,
-          textContent: getNoteTextContent(content),
-          mode: updates.mode ?? note.mode,
+          content: newContent,
+          textContent,
+          mode,
           isPinned: updates.isPinned ?? note.isPinned,
         };
         persistChange(payload);
       }, 1000);
     },
-    [localTitle, note.mode, note.isPinned, persistChange, editor],
+    [localTitle, note.mode, note.isPinned, persistChange],
+  );
+
+  const handlePasteText = useCallback((text: string): string | null => {
+    const detection = detectTerminalTable(text);
+    if (detection.type === 'table') return detection.markdown;
+    if (detection.type === 'code') return '```text\n' + text + '\n```';
+    return null; // let CodeMirror's default plain-text paste handle it
+  }, []);
+
+  const handlePasteImage = useCallback((file: File) => {
+    const pasteNoteId = syncedNoteIdRef.current;
+    // Capture the selection synchronously, at paste time — resizing runs
+    // async (canvas.toDataURL), during which the user can move the cursor
+    // or select other text. Reading the selection only after the resize
+    // resolves would insert the image at the wrong, now-current position.
+    const pasteRange = markdownEditorRef.current?.getSelection() ?? { start: 0, end: 0 };
+    resizeImageToDataURL(file).then((dataUrl) => {
+      if (syncedNoteIdRef.current !== pasteNoteId) return;
+      if (currentModeRef.current !== NoteMode.RICH) return;
+      markdownEditorRef.current?.insertAt(pasteRange, `![${file.name}](${dataUrl})`);
+    });
+  }, []);
+
+  const applyFormatting = useCallback(
+    (fn: (text: string, sel: { start: number; end: number }) => FormattingResult) => {
+      const editor = markdownEditorRef.current;
+      if (!editor) return;
+      const sel = editor.getSelection();
+      const result = fn(content, sel);
+      editor.applyFormatting(result);
+      setContent(result.text);
+      contentRef.current = result.text;
+      triggerSave({ content: result.text });
+    },
+    [content, triggerSave],
   );
 
   useImperativeHandle(
     ref,
     () => ({
       getCurrentState: () => {
-        const textContent =
-          note.mode === NoteMode.RICH
-            ? nodeToText((editor?.getJSON() ?? {}) as TiptapNode)
-            : getNoteTextContent(plainContentRef.current);
+        const textContent = markdownToPlainText(content);
         return { title: localTitle, textContent };
       },
     }),
-    [localTitle, note.mode, editor],
+    [localTitle, content],
   );
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -477,45 +299,30 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   };
 
   const handleSwitchMode = () => {
-    if (note.mode === NoteMode.RICH) {
-      setModeConfirmHasImages(editor?.getHTML().includes('<img') ?? false);
-      setShowModeConfirm(true);
-    } else {
-      const richHTML = wrapPlainText(plainContentRef.current);
-      editor?.commands.setContent(richHTML);
-      persistChange(
-        {
-          content: richHTML,
-          textContent: getNoteTextContent(richHTML),
-          mode: NoteMode.RICH,
-        },
-        { showProgressAndSuccess: false },
-      );
-    }
-  };
-
-  const confirmSwitchToPlain = () => {
-    setShowModeConfirm(false);
-    const json = editor?.getJSON() as TiptapNode | undefined;
-    const plainText = json ? nodeToText(json).trim() : '';
-    setPlainContent(plainText);
-    plainContentRef.current = plainText;
-    editor?.commands.setContent(plainText);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    const newMode = note.mode === NoteMode.RICH ? NoteMode.PLAIN : NoteMode.RICH;
+    const textContent = markdownToPlainText(content);
     persistChange(
-      {
-        content: plainText,
-        textContent: plainText,
-        mode: NoteMode.PLAIN,
-      },
+      { mode: newMode, content, textContent, title: localTitle },
       { showProgressAndSuccess: false },
     );
   };
 
+  // mode is presentation only — content is the same canonical Markdown
+  // regardless of which editor is showing it, so its plain-text projection
+  // must be too. Branching this on note.mode would make Copy Plain / Export
+  // .txt / word-count non-deterministic: switching a note's mode doesn't
+  // touch content, so the same content could silently strip on one side of
+  // a mode toggle and not the other. Computed live from `content` (not the
+  // persisted note.textContent) since the debounced save may not have
+  // flushed yet.
+  const displayText = markdownToPlainText(content);
+  const wordCount = countWords(displayText);
+  const charCount = countCharacters(displayText);
+
   const copyToClipboard = async () => {
-    const plainText =
-      note.mode === NoteMode.PLAIN ? plainContentRef.current : (editor?.getText() ?? '');
     try {
-      await navigator.clipboard.writeText(plainText);
+      await navigator.clipboard.writeText(displayText);
       setToast({ message: 'Copied!', variant: 'success' });
     } catch {
       setToast({ message: 'Clipboard access denied.', variant: 'error' });
@@ -523,32 +330,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   };
 
   const handleExportTxt = () => {
-    const text =
-      note.mode === NoteMode.RICH
-        ? nodeToText((editor?.getJSON() ?? {}) as TiptapNode)
-        : plainContentRef.current;
-    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, text);
+    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, displayText);
   };
 
   const handleExportMd = () => {
-    const text =
-      note.mode === NoteMode.RICH
-        ? nodeToMarkdown((editor?.getJSON() ?? {}) as TiptapNode).trim()
-        : plainContentRef.current;
-    downloadTextFile(`${sanitizeFilename(localTitle)}.md`, text);
+    downloadTextFile(`${sanitizeFilename(localTitle)}.md`, content);
   };
-
-  // Word counting needs block boundaries preserved (otherwise adjacent paragraphs merge
-  // into one "word"); character counting needs them absent (773dc49 — no phantom \n\n).
-  // One separator can't serve both, so RICH mode reads two differently-separated strings.
-  const wordCount =
-    note.mode === NoteMode.RICH
-      ? countWords(editor?.getText({ blockSeparator: '\n' }) ?? '')
-      : countWords(plainContent);
-  const charCount =
-    note.mode === NoteMode.RICH
-      ? countCharacters(editor?.getText({ blockSeparator: '' }) ?? '')
-      : countCharacters(plainContent);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
@@ -932,22 +719,43 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       </header>
 
       {/* Formatting Toolbar for Rich Mode */}
-      {editor && note.mode === NoteMode.RICH && <RichToolbar editor={editor} />}
+      {note.mode === NoteMode.RICH && (
+        <RichToolbar
+          onToggleInlineMark={(marker) =>
+            applyFormatting((text, sel) => toggleInlineMark(text, sel, marker))
+          }
+          onToggleLinePrefix={(prefix) =>
+            applyFormatting((text, sel) => toggleLinePrefix(text, sel, prefix))
+          }
+          onWrapCodeBlock={() => applyFormatting(wrapCodeBlock)}
+        />
+      )}
 
       {/* Editor Body */}
-      <div
-        className={`flex-1 overflow-auto p-6 transition-colors md:px-10 lg:px-20 ${note.mode === NoteMode.PLAIN ? 'font-mono' : 'font-sans'}`}
-      >
+      <div className="flex-1 overflow-auto p-6 font-mono transition-colors md:px-10 lg:px-20">
         {note.mode === NoteMode.RICH ? (
-          <EditorContent editor={editor} className="h-full" />
+          <MarkdownEditor
+            key={note.id}
+            ref={markdownEditorRef}
+            value={content}
+            onChange={(val) => {
+              setContent(val);
+              contentRef.current = val;
+              triggerSave({ content: val });
+            }}
+            onPasteText={handlePasteText}
+            onPasteImage={handlePasteImage}
+            autoFocus={autoFocus}
+            searchQuery={searchQuery}
+          />
         ) : (
           <textarea
             ref={textareaRef}
-            value={plainContent}
+            value={content}
             onChange={(e) => {
               const val = e.target.value;
-              setPlainContent(val);
-              plainContentRef.current = val;
+              setContent(val);
+              contentRef.current = val;
               triggerSave({ content: val });
             }}
             onPaste={(e) => {
@@ -962,10 +770,9 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   const start = ta.selectionStart;
                   const end = ta.selectionEnd;
                   const placeholder = `[image: ${name}]`;
-                  const newVal =
-                    plainContent.slice(0, start) + placeholder + plainContent.slice(end);
-                  setPlainContent(newVal);
-                  plainContentRef.current = newVal;
+                  const newVal = content.slice(0, start) + placeholder + content.slice(end);
+                  setContent(newVal);
+                  contentRef.current = newVal;
                   triggerSave({ content: newVal });
                 }
               }
@@ -1009,20 +816,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           onDelete();
         }}
         onCancel={() => setShowDeleteConfirm(false)}
-      />
-
-      <ConfirmDialog
-        open={showModeConfirm}
-        title="Switch to Plain Text"
-        message={
-          modeConfirmHasImages
-            ? 'Switching to plain text will permanently remove formatting and embedded images. Images will be replaced with placeholders. Continue?'
-            : 'Switching to plain text will permanently remove formatting. Continue?'
-        }
-        variant="warning"
-        confirmLabel="Switch"
-        onConfirm={confirmSwitchToPlain}
-        onCancel={() => setShowModeConfirm(false)}
       />
 
       <Toast

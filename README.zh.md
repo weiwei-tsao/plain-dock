@@ -1,16 +1,16 @@
 # PlainDock
 
-一款自托管的极简双模式笔记应用。每条笔记独立运行于**纯文本**或**富文本**模式，内置三层 HTML 净化管道，确保粘贴内容安全、格式统一。完整支持手机、平板和桌面三种屏幕尺寸。
+一款自托管的极简双模式笔记应用。每条笔记独立运行于 **PLAIN**（纯文本 `<textarea>`）或 **RICH**（基于 CodeMirror 的 Markdown 源码编辑，带语法高亮）模式——两种模式共享同一份规范化的 Markdown/纯文本 `content`，因此模式切换是无损的。粘贴内容始终以纯文本插入，剪贴板中的 HTML 会被有意忽略。完整支持手机、平板和桌面三种屏幕尺寸。
 
 [English](README.md)
 
 ## 功能特性
 
-- **双模式编辑** — 每条笔记独立切换纯文本（`<textarea>`）或富文本（Tiptap）模式；从富文本切换至纯文本时需确认，格式会被清除
-- **三层粘贴净化** — 安全过滤 → 标签归一化 → 结构降级（表格转文本，图片/视频转占位符）
+- **双模式编辑** — 每条笔记独立切换纯文本（`<textarea>`）或基于 CodeMirror 的 Markdown 源码编辑模式；两种模式共享同一份内容，切换无损、无需确认弹窗
+- **纯文本粘贴** — 粘贴内容始终以纯文本插入，剪贴板中的 HTML 会被有意忽略
 - **自动保存** — 1 秒防抖延迟，请求串行队列防止并发写入冲突
 - **置顶与搜索** — 重要笔记置顶；搜索同时匹配标题和正文内容
-- **复制选项** — 支持复制为纯文本或富文本 HTML
+- **复制与导出** — 复制笔记文本到剪贴板；支持导出为 `.txt` 或 `.md`
 - **移动端响应式** — 手机（< 768px）单面板堆叠导航，平板（768–1023px）窄侧栏布局，桌面（1024px+）完整双栏布局
 - **侧栏可折叠** — 平板/桌面支持折叠展开；手机通过返回按钮导航，无折叠按钮
 - **密码保护** — 单一共享密码，JWT 会话存储于 httpOnly Cookie（有效期 30 天）
@@ -171,28 +171,18 @@ Vercel 的 Serverless 函数不能把本地 SQLite 文件当作持久存储。�
   ├── Sidebar                 笔记列表、搜索、置顶标识
   └── editor/
         ├── EditorCanvas      双模式编辑器、自动保存、粘贴处理
-        └── RichToolbar       Tiptap 格式化工具栏
+        ├── MarkdownEditor    RICH 模式的 CodeMirror 6 封装
+        └── RichToolbar       Markdown 格式化工具栏
 
 服务端库（src/lib/）
   ├── db.ts                   Prisma 单例；按 DATABASE_URL 使用文件 SQLite 或 Turso/libSQL
   ├── auth.ts                 JWT 签发与验证（仅服务端）
   ├── serialize.ts            Prisma 类型转客户端类型（仅服务端）
-  └── sanitizer/              三层 HTML 净化管道（客户端运行）
+  └── markdown/               两种编辑模式共用的纯文本处理函数（粘贴检测、纯文本投影、格式化、搜索）
 
 中间件（src/middleware.ts）
   └── Edge Runtime — 对每个请求进行 JWT 结构与过期检查
 ```
-
-### 净化管道详解
-
-粘贴内容依次经过三层处理：
-
-| 层级 | 名称 | 处理内容 |
-|------|------|---------|
-| Layer 1 | 安全过滤 | 移除 `script`、`style`、`iframe`、`object`、`meta` 及其所有子节点 |
-| Layer 2 | 标签归一化 | `div→p`、`b→strong`、`i→em`，统一为语义化标签 |
-| Layer 3 | 结构降级 | 表格转制表符分隔的 `<p>`；图片/视频转 `[TAG: src]` 占位符 |
-| 最终清理 | 白名单过滤 | 仅保留许可标签和 CSS 属性；链接强制加 `target="_blank"` 和 `rel="noopener noreferrer"` |
 
 ### 响应式布局
 
@@ -208,6 +198,6 @@ Vercel 的 Serverless 函数不能把本地 SQLite 文件当作持久存储。�
 - **React 19** + **TypeScript**（strict 模式）
 - **Prisma** + **SQLite/libSQL** — 本地和 Docker 使用文件 SQLite，Vercel 使用 Turso
 - **Tailwind CSS v4**（PostCSS 插件，无配置文件）
-- **Tiptap** — 富文本编辑器（StarterKit + Underline 扩展）
+- **CodeMirror 6** — RICH 模式的 Markdown 源码编辑器，带语法高亮
 - **Lucide React** — 图标库
 - **jsonwebtoken** — JWT 签发与验证

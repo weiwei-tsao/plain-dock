@@ -1,16 +1,16 @@
 # PlainDock
 
-A self-hosted, minimalist dual-mode note-taking app. Each note operates in **Plain Text** or **Rich Text** mode, with a 3-layer HTML sanitization pipeline that cleans pasted content for safe, consistent formatting. Fully responsive across phone, tablet, and desktop.
+A self-hosted, minimalist dual-mode note-taking app. Each note operates in **PLAIN** (plain-text `<textarea>`) or **RICH** (Markdown source editing with CodeMirror syntax highlighting) mode — both modes store the same canonical Markdown/plain-text `content`, so switching modes is lossless. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Fully responsive across phone, tablet, and desktop.
 
 [中文文档](README.zh.md)
 
 ## Features
 
-- **Dual-mode editing** — switch between plain text (`<textarea>`) and rich text (Tiptap) per note; switching to plain strips formatting with a confirmation
-- **3-layer paste sanitization** — security stripping → tag normalization → structure downgrade (tables to text, media to placeholders)
+- **Dual-mode editing** — switch between plain text (`<textarea>`) and a CodeMirror-based Markdown source editor per note; both modes share the same underlying content, so switching is lossless with no confirmation dialog
+- **Plain-text paste** — pasted content is always inserted as plain text; clipboard HTML is intentionally ignored
 - **Auto-save** — 1-second debounced saves with a sequential request queue to prevent race conditions
 - **Pin & search** — pin notes to the top; search filters by title and text content simultaneously
-- **Copy options** — copy as plain text or rich HTML to clipboard
+- **Copy & export** — copy note text to clipboard; export as `.txt` or `.md`
 - **Mobile-responsive** — stacked single-panel layout on phones (< 768px), narrower sidebar on tablet (768–1023px), full layout on desktop (1024px+)
 - **Collapsible sidebar** — collapse/expand on tablet and desktop; hidden on phone via back-button navigation
 - **Password-protected** — single shared password with JWT session cookies (httpOnly, 30-day expiry)
@@ -170,13 +170,14 @@ Client Components (src/components/)
   ├── Sidebar                 Note list, search, pin indicators
   └── editor/
         ├── EditorCanvas      Dual-mode editor, auto-save, paste handling
-        └── RichToolbar       Tiptap formatting toolbar
+        ├── MarkdownEditor    CodeMirror 6 wrapper for RICH mode
+        └── RichToolbar       Markdown formatting toolbar
 
 Server Libraries (src/lib/)
   ├── db.ts                   Prisma singleton; file SQLite or Turso/libSQL by DATABASE_URL
   ├── auth.ts                 JWT sign/verify (server-only)
   ├── serialize.ts            Prisma → client type conversion (server-only)
-  └── sanitizer/              3-layer HTML sanitization pipeline (client-side)
+  └── markdown/               Shared Markdown text functions (paste detection, plain-text projection, formatting, search)
 
 Middleware (src/middleware.ts)
   └── Edge Runtime — JWT structure + expiry check on every request
@@ -188,6 +189,6 @@ Middleware (src/middleware.ts)
 - **React 19** + **TypeScript** (strict)
 - **Prisma** + **SQLite/libSQL** (file SQLite locally/in Docker, Turso on Vercel)
 - **Tailwind CSS v4** (PostCSS plugin, no config file)
-- **Tiptap** — rich text editor with StarterKit + Underline extension
+- **CodeMirror 6** — Markdown source editor with syntax highlighting for RICH mode
 - **Lucide React** — icons
 - **jsonwebtoken** — JWT signing and verification

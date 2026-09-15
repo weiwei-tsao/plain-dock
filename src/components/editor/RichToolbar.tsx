@@ -1,11 +1,10 @@
+// src/components/editor/RichToolbar.tsx
 'use client';
 
 import React from 'react';
-import type { Editor } from '@tiptap/react';
 import {
   Bold,
   Italic,
-  Underline as UnderlineIcon,
   Strikethrough,
   Code,
   List,
@@ -13,23 +12,23 @@ import {
   Heading1,
   Heading2,
   Quote,
-  Eraser,
 } from 'lucide-react';
 
 interface RichToolbarProps {
-  editor: Editor;
+  onToggleInlineMark: (marker: string) => void;
+  onToggleLinePrefix: (prefix: string) => void;
+  onWrapCodeBlock: () => void;
 }
 
 const ToolbarButton: React.FC<{
   onClick: () => void;
-  active: boolean;
   title?: string;
   children: React.ReactNode;
-}> = ({ onClick, active, title, children }) => (
+}> = ({ onClick, title, children }) => (
   <button
     onClick={onClick}
     title={title}
-    className={`rounded p-2.5 hover:bg-zinc-800 md:p-1.5 ${active ? 'bg-zinc-800 text-indigo-400' : 'text-zinc-400'}`}
+    className="rounded p-2.5 text-zinc-400 hover:bg-zinc-800 md:p-1.5"
   >
     {children}
   </button>
@@ -37,89 +36,43 @@ const ToolbarButton: React.FC<{
 
 const Divider = () => <div className="mx-1 h-4 w-px bg-zinc-800" />;
 
-const RichToolbar: React.FC<RichToolbarProps> = ({ editor }) => {
+const RichToolbar: React.FC<RichToolbarProps> = ({
+  onToggleInlineMark,
+  onToggleLinePrefix,
+  onWrapCodeBlock,
+}) => {
   return (
     <div className="overflow-x-auto border-b border-zinc-800 bg-zinc-900/50">
       <div className="flex flex-nowrap items-center gap-1 p-2 md:flex-wrap">
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          active={editor.isActive('bold')}
-          title="Bold"
-        >
+        <ToolbarButton onClick={() => onToggleInlineMark('**')} title="Bold">
           <Bold className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          active={editor.isActive('italic')}
-          title="Italic"
-        >
+        <ToolbarButton onClick={() => onToggleInlineMark('_')} title="Italic">
           <Italic className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          active={editor.isActive('underline')}
-          title="Underline"
-        >
-          <UnderlineIcon className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          active={editor.isActive('strike')}
-          title="Strikethrough"
-        >
+        <ToolbarButton onClick={() => onToggleInlineMark('~~')} title="Strikethrough">
           <Strikethrough className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          active={editor.isActive('heading', { level: 1 })}
-          title="Heading 1"
-        >
+        <ToolbarButton onClick={() => onToggleLinePrefix('# ')} title="Heading 1">
           <Heading1 className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          active={editor.isActive('heading', { level: 2 })}
-          title="Heading 2"
-        >
+        <ToolbarButton onClick={() => onToggleLinePrefix('## ')} title="Heading 2">
           <Heading2 className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          active={editor.isActive('bulletList')}
-          title="Bullet List"
-        >
+        <ToolbarButton onClick={() => onToggleLinePrefix('- ')} title="Bullet List">
           <List className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          active={editor.isActive('orderedList')}
-          title="Ordered List"
-        >
+        <ToolbarButton onClick={() => onToggleLinePrefix('1. ')} title="Ordered List">
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          active={editor.isActive('codeBlock')}
-          title="Code Block"
-        >
+        <ToolbarButton onClick={onWrapCodeBlock} title="Code Block">
           <Code className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          active={editor.isActive('blockquote')}
-          title="Blockquote"
-        >
+        <ToolbarButton onClick={() => onToggleLinePrefix('> ')} title="Blockquote">
           <Quote className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().unsetAllMarks().run()}
-          active={false}
-          title="Clear Formatting"
-        >
-          <Eraser className="h-4 w-4" />
         </ToolbarButton>
       </div>
     </div>

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is PlainDock
 
-PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (semantic HTML via Tiptap) mode. Pasted HTML content goes through a 3-layer sanitization pipeline (security stripping → tag normalization → structure downgrade). Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
+PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (Markdown source with syntax highlighting via CodeMirror) mode — both store the same canonical Markdown/plain-text `content`; `mode` only selects the editor. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
 
 ## Development Commands
 
@@ -53,11 +53,11 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 
 ## Architecture
 
-**Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite/libSQL, Tailwind CSS v4 (PostCSS plugin), Tiptap rich text editor, Lucide icons. Docker-ready with standalone output; Vercel-ready with Turso.
+**Stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript (strict), Prisma + SQLite/libSQL, Tailwind CSS v4 (PostCSS plugin), CodeMirror 6 editor, Lucide icons. Docker-ready with standalone output; Vercel-ready with Turso.
 
 **Path alias:** `@/*` maps to `./src/*`.
 
-**Detailed conventions** are in `.claude/rules/` (api, auth, components, database, docker, git, nextjs, sanitizer, styling) — these are auto-loaded by Claude Code and cover patterns not repeated here.
+**Detailed conventions** are in `.claude/rules/` (api, auth, components, database, docker, git, markdown, nextjs, styling) — these are auto-loaded by Claude Code and cover patterns not repeated here.
 
 **Available skills** — invoke with `/skill-name`:
 
@@ -68,7 +68,6 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 | `/add-note-field` | Add a new field to the Note model across all 6 affected files |
 | `/new-api-route` | Scaffold a new API route with all project conventions and boilerplate |
 | `/deploy` | Pre-deploy quality gate + Docker build and container launch |
-| `/extend-sanitizer` | Add allowed tags, dangerous tags, CSS properties, or tag normalizations to the sanitizer |
 | `/create-pr` | Draft a PR title (≤ 12 words) and description (≤ 60 words) against a specified target branch |
 
 ### Server-side
@@ -90,8 +89,9 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 - `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `folders`, `activeFolderId`, pane-layout state (`folderWidth`, `notesWidth`, `folderCollapsed`, `viewportTier`), and mobile-nav state (`mobilePanel: 'list' | 'editor'`, `showFolders`). `mobilePanel` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. `showFolders` layers a full-screen Folders step on top of that stack on phones.
 - `src/app/login/page.tsx` — Login form, calls `/api/auth/login`, redirects to `/` on success.
 - `src/lib/api-client.ts` — Typed fetch wrapper (`noteApi`) for all `/api/notes` endpoints.
-- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: Tiptap for RICH, `<textarea>` for PLAIN. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Handles paste sanitization, mode switching, pin toggle, clipboard copy (plain + rich HTML). Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
-- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for Tiptap. Horizontally scrollable single row on phone; wraps on tablet/desktop.
+- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: CodeMirror-based `MarkdownEditor` for RICH, `<textarea>` for PLAIN — both store the same canonical Markdown/plain-text `content`. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Paste is always plain text (clipboard HTML is ignored); mode switching is lossless. Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
+- `src/components/editor/MarkdownEditor.tsx` — CodeMirror 6 wrapper for RICH mode: Markdown syntax highlighting, search highlighting, and an imperative handle (`getSelection`, `applyFormatting`, `insertAtCursor`) used by `RichToolbar` and image paste.
+- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for RICH mode, built on pure functions from `src/lib/markdown/formatting.ts` (not a rich-text editor API). Horizontally scrollable single row on phone; wraps on tablet/desktop.
 - `src/components/sidebar/FolderSidebar.tsx` — Folder list ("All Notes" + folders with counts) with inline create/rename/delete. `variant: 'pane' | 'mobile-fullscreen'` — pane mode renders inline with its own resizable width and edge toggle chevron; mobile-fullscreen mode renders full width with a header back button.
 - `src/components/sidebar/NotesList.tsx` — Search filtering, pull-to-refresh, and the note list with pin indicators. Owns the folder-toggle button that opens `FolderSidebar` (as an overlay on tablet, full-screen on mobile).
 - `src/components/sidebar/ResizeHandle.tsx` — Thin draggable divider between panes; reports `deltaX` via `onResize` as the user drags.
@@ -106,16 +106,15 @@ Three-pane (Folder Sidebar | Notes List | Editor) layout driven by JS viewport-t
 | Tablet  | 768–1023px | Two-pane (Notes List + Editor); Folder Sidebar auto-collapses to an overlay opened via toggle |
 | Desktop | 1024px+    | Three-pane, all resizable; Folder Sidebar can be manually collapsed    |
 
-See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. No centralized theme or CSS variables — colors are inline Tailwind classes. ProseMirror/Tiptap styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
+See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. No centralized theme or CSS variables — colors are inline Tailwind classes. CodeMirror editor styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
 
-### Sanitizer (`src/lib/sanitizer/`)
+### Markdown (`src/lib/markdown/`)
 
-Client-side 3-layer HTML sanitization pipeline for pasted content:
-1. **Security** (`config.ts` → `DANGEROUS_TAGS`): strips `script`, `style`, `iframe`, `object`, `meta`
-2. **Normalization** (`normalize.ts` → `TAG_NORMALIZE_MAP`): `div→p`, `b→strong`, `i→em`
-3. **Structure downgrade**: tables→tab-separated `<p>`, media→`[TAG: src]` placeholders
-
-Allowlisted tags and styles defined in `config.ts`.
+Pure, framework-independent text functions shared by both editor modes:
+`terminal-table.ts` (paste-time table/code detection), `text-projection.ts`
+(`markdownToPlainText` for `Note.textContent`), `formatting.ts` (toolbar
+actions), `find-matches.ts` (search highlighting). See
+`.claude/rules/markdown.md`.
 
 ## Running the App
 
@@ -149,6 +148,23 @@ npm run docker:sync-from-turso # manually replace ./data/notes.db with Turso sna
 - Do not rely on a fixed Docker container name. Use `docker compose ps`, `docker compose logs`, and `docker compose down` from the intended checkout. If an old container named `plaindock` blocks startup, inspect it with `docker ps -a --filter "name=^/plaindock$"` and remove the stale container with `docker rm -f plaindock`; this does not remove `./data/notes.db`.
 - `Dockerfile` uses a multi-stage build (deps → build → standalone runner).
 - Container auto-restarts on crash (`restart: unless-stopped`).
+
+### One-Time Rich-HTML-to-Markdown Migration
+
+`scripts/migrate-rich-html-to-markdown.mjs` converts existing RICH notes from the old Tiptap HTML format to the canonical Markdown `content` this branch introduces. Run it once per environment (local dev, Docker, Turso) after deploying this branch's code:
+
+```bash
+DATABASE_URL="file:./prisma/dev.db" npm run migrate:rich-html-to-markdown            # dry run (default) - reports only
+DATABASE_URL="file:./prisma/dev.db" npm run migrate:rich-html-to-markdown -- --write # actually converts and writes
+```
+
+- **A relative `file:` path here is resolved differently than normal Prisma commands.** This script resolves it once, itself, relative to the current working directory you run the command from (repo root, via `npm run`) — not relative to `prisma/schema.prisma` the way `prisma migrate` or the dev server do. That's why the example above is `file:./prisma/dev.db`, not the `file:./dev.db` used elsewhere in this doc — the script uses the same resolved path for both its backup check and its actual database connection, so there's no ambiguity, but the value itself is cwd-relative, not schema-relative. Run the command from the repo root as shown.
+- Defaults to a dry run; nothing is written until `--write` is passed.
+- Against a Turso `DATABASE_URL` (`libsql://` or `https://`), `--write` also requires `--turso-backup-confirmed` — take an independent Turso export/backup first, since the script has no local file to copy for a remote database.
+- Against a file `DATABASE_URL`, `--write` backs up the existing database file (and its `-wal`/`-shm` sidecars) before writing; if no existing file is found at that path, the script refuses to proceed rather than migrate with zero backup — this usually means `DATABASE_URL` is wrong, not that it's safe to continue.
+- **Unlike `scripts/sync-turso-to-docker.mjs`, this script does NOT auto-load a `.env` file.** `DATABASE_URL` (and `TURSO_AUTH_TOKEN` for Turso) must be set explicitly in the invoking shell/command — it will not pick up `.env` automatically.
+- Idempotent against already-migrated notes: skip detection looks for the actual block-level HTML tags the old editor emits (`<p>`, `<h1>`-`<h6>`, `<ul>`/`<ol>`/`<li>`, `<pre>`, `<blockquote>`, `<table>` and its children, `<img>`, `<br>`, `<hr>`), not just "contains any `<tag>`" — so already-converted Markdown that happens to contain an inline `<u>...</u>` (the underline convention) or an autolink is correctly left alone on a second run, rather than being misdetected as unconverted source HTML and partially destroyed.
+- Delete this script from the repo once all environments (local, Docker, Turso/Vercel) have been verified migrated.
 
 ### Vercel + Turso
 

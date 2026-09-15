@@ -28,7 +28,7 @@ Set `PLAYWRIGHT_BASE_URL` if the dev server isn't on `http://localhost:3000`.
 
 ## Scope
 
-Covers the golden path only: login, note CRUD, PLAIN/RICH mode switch, paste
-sanitization, folder workflows, and search (including the Cmd/Ctrl+K focus
+Covers the golden path only: login, note CRUD, PLAIN/RICH mode switch, plain-text paste
+handling, folder workflows, and search (including the Cmd/Ctrl+K focus
 behavior per viewport tier from #40). Visual/exploratory checks that can't be
 expressed as a DOM assertion belong to Layer 3 (browser-use), not here.

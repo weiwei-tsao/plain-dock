@@ -50,33 +50,35 @@ test('switches a note between PLAIN and RICH mode', async ({ page }) => {
   await plainSaved;
 
   await page.getByRole('button', { name: 'PLAIN', exact: true }).click();
-  await expect(page.locator('.ProseMirror')).toContainText(plainText);
+  await expect(page.locator('.cm-content')).toContainText(plainText);
 
   await page.getByRole('button', { name: 'RICH', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Switch' }).click();
   await expect(page.getByPlaceholder('Start typing plain text...')).toHaveValue(plainText);
 
   await deleteActiveNote(page);
 });
 
-test('sanitizes pasted HTML while in RICH mode', async ({ page }) => {
+test('ignores clipboard HTML and inserts plain text when pasting in RICH mode', async ({
+  page,
+}) => {
   await createNote(page);
   await page.getByRole('button', { name: 'PLAIN', exact: true }).click();
 
-  const proseMirror = page.locator('.ProseMirror');
-  await proseMirror.click();
-  await proseMirror.evaluate((el, html) => {
+  const cmContent = page.locator('.cm-content');
+  await cmContent.click();
+  await cmContent.evaluate((el) => {
     const dataTransfer = new DataTransfer();
-    dataTransfer.setData('text/html', html);
+    dataTransfer.setData('text/html', '<h2>Hello</h2><script>window.__xss = true;</script>');
+    dataTransfer.setData('text/plain', '## Hello (plain text)');
     el.dispatchEvent(
       new ClipboardEvent('paste', { clipboardData: dataTransfer, bubbles: true, cancelable: true }),
     );
-  }, '<h2>Hello</h2><script>alert(1)</script><b>World</b>');
+  });
 
-  await expect(proseMirror).toContainText('Hello');
-  await expect(proseMirror).toContainText('World');
-  await expect(proseMirror.locator('script')).toHaveCount(0);
-  expect(await proseMirror.innerHTML()).not.toContain('<script');
+  await expect(cmContent).toContainText('## Hello (plain text)');
+  expect(
+    await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss),
+  ).toBeUndefined();
 
   await deleteActiveNote(page);
 });
