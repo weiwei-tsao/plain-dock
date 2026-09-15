@@ -17,7 +17,7 @@ import { markdownToPlainText } from '@/lib/markdown/text-projection';
 import {
   toggleInlineMark,
   toggleLinePrefix,
-  toggleCodeBlock,
+  wrapCodeBlock,
   type FormattingResult,
 } from '@/lib/markdown/formatting';
 import MarkdownEditor, { type MarkdownEditorHandle } from './MarkdownEditor';
@@ -308,10 +308,21 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     );
   };
 
+  // mode is presentation only — content is the same canonical Markdown
+  // regardless of which editor is showing it, so its plain-text projection
+  // must be too. Branching this on note.mode would make Copy Plain / Export
+  // .txt / word-count non-deterministic: switching a note's mode doesn't
+  // touch content, so the same content could silently strip on one side of
+  // a mode toggle and not the other. Computed live from `content` (not the
+  // persisted note.textContent) since the debounced save may not have
+  // flushed yet.
+  const displayText = markdownToPlainText(content);
+  const wordCount = countWords(displayText);
+  const charCount = countCharacters(displayText);
+
   const copyToClipboard = async () => {
-    const textToCopy = note.mode === NoteMode.RICH ? markdownToPlainText(content) : content;
     try {
-      await navigator.clipboard.writeText(textToCopy);
+      await navigator.clipboard.writeText(displayText);
       setToast({ message: 'Copied!', variant: 'success' });
     } catch {
       setToast({ message: 'Clipboard access denied.', variant: 'error' });
@@ -319,17 +330,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   };
 
   const handleExportTxt = () => {
-    const text = note.mode === NoteMode.RICH ? markdownToPlainText(content) : content;
-    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, text);
+    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, displayText);
   };
 
   const handleExportMd = () => {
     downloadTextFile(`${sanitizeFilename(localTitle)}.md`, content);
   };
-
-  const displayText = note.mode === NoteMode.RICH ? markdownToPlainText(content) : content;
-  const wordCount = countWords(displayText);
-  const charCount = countCharacters(displayText);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-black">
@@ -721,7 +727,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           onToggleLinePrefix={(prefix) =>
             applyFormatting((text, sel) => toggleLinePrefix(text, sel, prefix))
           }
-          onToggleCodeBlock={() => applyFormatting(toggleCodeBlock)}
+          onWrapCodeBlock={() => applyFormatting(wrapCodeBlock)}
         />
       )}
 
