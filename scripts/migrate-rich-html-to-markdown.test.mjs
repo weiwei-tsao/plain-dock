@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { markdownToPlainText } from '../src/lib/markdown/text-projection.ts';
 
@@ -106,6 +107,65 @@ describe('migrateRichNotes idempotency (Fix 1)', () => {
     expect(update).not.toHaveBeenCalled();
     expect(result).toEqual({ converted: 0, skipped: 1, failed: 0, total: 1 });
   });
+
+  it('skips already-migrated Markdown containing an inline <u> tag, not just plain Markdown', async () => {
+    // Codex review finding: htmlToMarkdown's own output can contain inline
+    // HTML remnants (the <u> underline convention, autolinks) that a naive
+    // "contains any <tag>" sniff would misclassify as un-migrated source
+    // HTML - re-converting it silently drops everything outside the <u>
+    // span. This is the exact repro Codex named: "# Title\n\n<u>x</u> tail"
+    // would collapse to "x".
+    const update = vi.fn();
+    const alreadyMigratedNote = {
+      id: 'note-2',
+      content: '# Title\n\n<u>x</u> tail',
+      mode: 'RICH',
+    };
+    const fakePrisma = {
+      note: {
+        findMany: vi.fn().mockResolvedValue([alreadyMigratedNote]),
+        update,
+      },
+    };
+
+    const result = await migrateRichNotes(fakePrisma, { write: true });
+
+    expect(update).not.toHaveBeenCalled();
+    expect(result).toEqual({ converted: 0, skipped: 1, failed: 0, total: 1 });
+  });
+
+  it('still converts real first-run HTML that happens to contain a <u> tag', async () => {
+    // The narrowed detection must not become so narrow it stops detecting
+    // genuine source HTML - real Tiptap HTML always has a block-level
+    // wrapper (ProseMirror requires block+ at the document root), so this
+    // must still be recognized and converted on a real first run.
+    const update = vi.fn();
+    const richNote = {
+      id: 'note-3',
+      content: '<p><u>underlined</u> and more text</p>',
+      mode: 'RICH',
+    };
+    const fakePrisma = {
+      note: {
+        findMany: vi.fn().mockResolvedValue([richNote]),
+        update,
+      },
+    };
+
+    const result = await migrateRichNotes(fakePrisma, { write: true });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'note-3' },
+      data: {
+        content: '<u>underlined</u> and more text',
+        // markdownToPlainTextForMigration strips Markdown syntax (headings,
+        // lists, **/_/~~, links) but not literal HTML tags like <u> - the
+        // <u> convention is intentionally not unwrapped by this projection.
+        textContent: '<u>underlined</u> and more text',
+      },
+    });
+    expect(result).toEqual({ converted: 1, skipped: 0, failed: 0, total: 1 });
+  });
 });
 
 describe('runMigration guard rails', () => {
@@ -133,7 +193,13 @@ describe('runMigration guard rails', () => {
     const fakeUrl = 'file:./this-file-does-not-exist-anywhere.db';
     await runMigration({ argv: [], env: { DATABASE_URL: fakeUrl } });
     expect(capturedConfigs).toHaveLength(1);
-    expect(capturedConfigs[0]).toEqual({ datasources: { db: { url: fakeUrl } } });
+    // The connection URL is resolved to an absolute path (same resolution
+    // the backup check uses) rather than passed through verbatim - a bare
+    // relative `file:` URL handed straight to PrismaClient would otherwise
+    // be resolved by Prisma relative to schema.prisma's directory, which
+    // can silently disagree with where this script's own backup check looks.
+    const expectedPath = path.resolve('./this-file-does-not-exist-anywhere.db');
+    expect(capturedConfigs[0]).toEqual({ datasources: { db: { url: `file:${expectedPath}` } } });
   });
 
   it('hard-stops --write against a file DATABASE_URL with nothing to back up (Fix 6b)', async () => {

@@ -159,7 +159,19 @@ export async function migrateRichNotes(prisma, { write }) {
       // (Markdown, not HTML) content would parse as a single JSDOM text node
       // (body.children.length === 0), so htmlToMarkdown would silently return
       // '' and blank the note out. Treat non-HTML content as already migrated.
-      if (!/<[a-z][^>]*>/i.test(note.content)) {
+      //
+      // Deliberately narrow to the block-level tags Tiptap's schema actually
+      // emits at the document root (ProseMirror requires `block+` there) -
+      // NOT a bare "contains any <tag>" sniff. htmlToMarkdown's own output
+      // can legitimately contain inline HTML remnants like `<u>...</u>`
+      // (the HTML-in-Markdown underline convention) or an autolink
+      // `<https://...>`; a broader regex would misclassify already-migrated
+      // Markdown containing one of those as un-migrated source HTML, feed it
+      // back into htmlToMarkdown, and silently drop everything outside the
+      // matched tag (e.g. "# Title\n\n<u>x</u> tail" -> "x").
+      const HTML_BLOCK_TAG =
+        /<(p|div|h[1-6]|ul|ol|li|pre|blockquote|table|tr|t[dh]|img|br|hr)\b[^>]*>/i;
+      if (!HTML_BLOCK_TAG.test(note.content)) {
         skipped++;
         continue;
       }
@@ -227,23 +239,34 @@ export async function runMigration({ argv = process.argv.slice(2), env = process
     );
   }
 
+  // Resolved once, up front, and reused for both the backup check and the
+  // actual Prisma connection below - otherwise the backup check resolves a
+  // relative `file:` path against process.cwd() while a bare `databaseUrl`
+  // handed to PrismaClient gets resolved by Prisma relative to
+  // schema.prisma's directory instead. Those two resolutions can disagree
+  // (they did: see the runbook note above), so the backup could silently
+  // check a different file than the one actually being written to.
+  let resolvedFileUrl = databaseUrl;
   let backupPath = null;
-  if (write && isFileUrl) {
+  if (isFileUrl) {
     const filePath = path.resolve(databaseUrl.slice('file:'.length));
-    backupPath = await createBackupIfExists(filePath);
-    if (backupPath === null) {
-      throw new Error(
-        `No existing database file found at "${filePath}" to back up before --write. ` +
-          'Verify DATABASE_URL points at the correct, existing database file before retrying. ' +
-          '(This could be a genuinely new/empty target, but a one-time migration of real data ' +
-          'should never proceed with zero backup and no acknowledgment.)',
-      );
+    resolvedFileUrl = `file:${filePath}`;
+    if (write) {
+      backupPath = await createBackupIfExists(filePath);
+      if (backupPath === null) {
+        throw new Error(
+          `No existing database file found at "${filePath}" to back up before --write. ` +
+            'Verify DATABASE_URL points at the correct, existing database file before retrying. ' +
+            '(This could be a genuinely new/empty target, but a one-time migration of real data ' +
+            'should never proceed with zero backup and no acknowledgment.)',
+        );
+      }
     }
   }
 
   const prisma = isTurso
     ? new PrismaClient({ adapter: new PrismaLibSQL({ url: databaseUrl, authToken: env.TURSO_AUTH_TOKEN }) })
-    : new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+    : new PrismaClient({ datasources: { db: { url: resolvedFileUrl } } });
 
   try {
     const result = await migrateRichNotes(prisma, { write });

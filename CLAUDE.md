@@ -158,11 +158,12 @@ DATABASE_URL="file:./prisma/dev.db" npm run migrate:rich-html-to-markdown       
 DATABASE_URL="file:./prisma/dev.db" npm run migrate:rich-html-to-markdown -- --write # actually converts and writes
 ```
 
+- **A relative `file:` path here is resolved differently than normal Prisma commands.** This script resolves it once, itself, relative to the current working directory you run the command from (repo root, via `npm run`) — not relative to `prisma/schema.prisma` the way `prisma migrate` or the dev server do. That's why the example above is `file:./prisma/dev.db`, not the `file:./dev.db` used elsewhere in this doc — the script uses the same resolved path for both its backup check and its actual database connection, so there's no ambiguity, but the value itself is cwd-relative, not schema-relative. Run the command from the repo root as shown.
 - Defaults to a dry run; nothing is written until `--write` is passed.
 - Against a Turso `DATABASE_URL` (`libsql://` or `https://`), `--write` also requires `--turso-backup-confirmed` — take an independent Turso export/backup first, since the script has no local file to copy for a remote database.
 - Against a file `DATABASE_URL`, `--write` backs up the existing database file (and its `-wal`/`-shm` sidecars) before writing; if no existing file is found at that path, the script refuses to proceed rather than migrate with zero backup — this usually means `DATABASE_URL` is wrong, not that it's safe to continue.
 - **Unlike `scripts/sync-turso-to-docker.mjs`, this script does NOT auto-load a `.env` file.** `DATABASE_URL` (and `TURSO_AUTH_TOKEN` for Turso) must be set explicitly in the invoking shell/command — it will not pick up `.env` automatically.
-- Idempotent: re-running it against already-migrated notes is a no-op (already-Markdown content is detected and skipped, not reconverted).
+- Idempotent against already-migrated notes: skip detection looks for the actual block-level HTML tags the old editor emits (`<p>`, `<h1>`-`<h6>`, `<ul>`/`<ol>`/`<li>`, `<pre>`, `<blockquote>`, `<table>` and its children, `<img>`, `<br>`, `<hr>`), not just "contains any `<tag>`" — so already-converted Markdown that happens to contain an inline `<u>...</u>` (the underline convention) or an autolink is correctly left alone on a second run, rather than being misdetected as unconverted source HTML and partially destroyed.
 - Delete this script from the repo once all environments (local, Docker, Turso/Vercel) have been verified migrated.
 
 ### Vercel + Turso
