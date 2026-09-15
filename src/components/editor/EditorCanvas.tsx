@@ -212,7 +212,10 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       saveTimeoutRef.current = setTimeout(() => {
         const newContent = updates.content ?? contentRef.current;
         const mode = updates.mode ?? note.mode;
-        const textContent = mode === NoteMode.RICH ? markdownToPlainText(newContent) : newContent;
+        // Always the stripped projection — content is canonical Markdown in both
+        // modes now, so this is the correct searchable/display representation
+        // regardless of which mode the note is currently in (see Fix 2).
+        const textContent = markdownToPlainText(newContent);
         const payload: NotePayload = {
           title: updates.title ?? localTitle,
           content: newContent,
@@ -260,11 +263,11 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     ref,
     () => ({
       getCurrentState: () => {
-        const textContent = note.mode === NoteMode.RICH ? markdownToPlainText(content) : content;
+        const textContent = markdownToPlainText(content);
         return { title: localTitle, textContent };
       },
     }),
-    [localTitle, note.mode, content],
+    [localTitle, content],
   );
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -293,8 +296,11 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const handleSwitchMode = () => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     const newMode = note.mode === NoteMode.RICH ? NoteMode.PLAIN : NoteMode.RICH;
-    const textContent = newMode === NoteMode.RICH ? markdownToPlainText(content) : content;
-    persistChange({ mode: newMode, content, textContent }, { showProgressAndSuccess: false });
+    const textContent = markdownToPlainText(content);
+    persistChange(
+      { mode: newMode, content, textContent, title: localTitle },
+      { showProgressAndSuccess: false },
+    );
   };
 
   const copyToClipboard = async () => {
