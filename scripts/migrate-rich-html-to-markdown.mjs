@@ -198,6 +198,12 @@ export async function runMigration({ argv = process.argv.slice(2), env = process
   const isTurso = databaseUrl.startsWith('libsql://') || databaseUrl.startsWith('https://');
   const isFileUrl = databaseUrl.startsWith('file:');
 
+  if (!isTurso && !isFileUrl) {
+    throw new Error(
+      `Unrecognized DATABASE_URL format: "${databaseUrl}". Expected a "file:" path or a Turso "libsql://"/"https://" URL.`,
+    );
+  }
+
   if (write && isTurso && !tursoBackupConfirmed) {
     throw new Error(
       'Refusing to run --write against a Turso DATABASE_URL without --turso-backup-confirmed. ' +

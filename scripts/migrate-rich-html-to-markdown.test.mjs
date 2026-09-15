@@ -72,4 +72,10 @@ describe('runMigration guard rails', () => {
       runMigration({ argv: ['--write'], env: { DATABASE_URL: 'libsql://example.turso.io' } }),
     ).rejects.toThrow('--turso-backup-confirmed');
   });
+
+  it('rejects an unrecognized DATABASE_URL format', async () => {
+    await expect(
+      runMigration({ argv: ['--write'], env: { DATABASE_URL: 'not-a-real-url' } }),
+    ).rejects.toThrow('Unrecognized DATABASE_URL format');
+  });
 });
