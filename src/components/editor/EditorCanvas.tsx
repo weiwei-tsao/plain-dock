@@ -238,10 +238,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
   const handlePasteImage = useCallback((file: File) => {
     const pasteNoteId = syncedNoteIdRef.current;
+    // Capture the selection synchronously, at paste time — resizing runs
+    // async (canvas.toDataURL), during which the user can move the cursor
+    // or select other text. Reading the selection only after the resize
+    // resolves would insert the image at the wrong, now-current position.
+    const pasteRange = markdownEditorRef.current?.getSelection() ?? { start: 0, end: 0 };
     resizeImageToDataURL(file).then((dataUrl) => {
       if (syncedNoteIdRef.current !== pasteNoteId) return;
       if (currentModeRef.current !== NoteMode.RICH) return;
-      markdownEditorRef.current?.insertAtCursor(`![${file.name}](${dataUrl})`);
+      markdownEditorRef.current?.insertAt(pasteRange, `![${file.name}](${dataUrl})`);
     });
   }, []);
 

@@ -15,7 +15,7 @@ export interface MarkdownEditorHandle {
   focus: () => void;
   getSelection: () => { start: number; end: number };
   applyFormatting: (result: FormattingResult) => void;
-  insertAtCursor: (text: string) => void;
+  insertAt: (range: { start: number; end: number }, text: string) => void;
 }
 
 interface MarkdownEditorProps {
@@ -128,10 +128,16 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
         });
         view.focus();
       },
-      insertAtCursor: (text) => {
+      insertAt: (range, text) => {
         const view = viewRef.current;
         if (!view) return;
-        const { from, to } = view.state.selection.main;
+        // The caller (image paste) captures `range` synchronously at paste
+        // time, before an async resize completes - the document may have
+        // changed length by then (e.g. more typing), so clamp rather than
+        // trust the captured offsets are still exactly in bounds.
+        const docLength = view.state.doc.length;
+        const from = Math.min(range.start, docLength);
+        const to = Math.min(range.end, docLength);
         view.dispatch({
           changes: { from, to, insert: text },
           selection: { anchor: from + text.length },
