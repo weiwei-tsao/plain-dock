@@ -1,10 +1,31 @@
-import { describe, it, expect } from 'vitest';
-import {
+import { describe, it, expect, vi } from 'vitest';
+import { markdownToPlainText } from '../src/lib/markdown/text-projection.ts';
+
+// Fully replaces the real PrismaClient for this test file only, so the
+// "which DATABASE_URL does runMigration actually connect with" regression
+// test below can never open a real database connection, mocked or not -
+// note.findMany() always resolves to an empty array.
+const { mockPrismaClientCtor, capturedConfigs } = vi.hoisted(() => {
+  const capturedConfigs = [];
+  const mockPrismaClientCtor = vi.fn().mockImplementation((config) => {
+    capturedConfigs.push(config);
+    return {
+      note: { findMany: vi.fn().mockResolvedValue([]) },
+      $disconnect: vi.fn().mockResolvedValue(undefined),
+    };
+  });
+  return { mockPrismaClientCtor, capturedConfigs };
+});
+
+vi.mock('@prisma/client', () => ({
+  PrismaClient: mockPrismaClientCtor,
+}));
+
+const {
   htmlToMarkdown,
   markdownToPlainTextForMigration,
   runMigration,
-} from './migrate-rich-html-to-markdown.mjs';
-import { markdownToPlainText } from '../src/lib/markdown/text-projection.ts';
+} = await import('./migrate-rich-html-to-markdown.mjs');
 
 describe('htmlToMarkdown', () => {
   it('converts headings, bold, italic, and links', () => {
@@ -77,5 +98,16 @@ describe('runMigration guard rails', () => {
     await expect(
       runMigration({ argv: ['--write'], env: { DATABASE_URL: 'not-a-real-url' } }),
     ).rejects.toThrow('Unrecognized DATABASE_URL format');
+  });
+
+  it('connects PrismaClient to the validated DATABASE_URL, not ambient env', async () => {
+    // PrismaClient is fully mocked above (module-wide for this file) - this
+    // never opens any real database, real or fake-path. Dry run (no --write)
+    // so the backup branch (real fs.access) isn't touched either.
+    capturedConfigs.length = 0;
+    const fakeUrl = 'file:./this-file-does-not-exist-anywhere.db';
+    await runMigration({ argv: [], env: { DATABASE_URL: fakeUrl } });
+    expect(capturedConfigs).toHaveLength(1);
+    expect(capturedConfigs[0]).toEqual({ datasources: { db: { url: fakeUrl } } });
   });
 });

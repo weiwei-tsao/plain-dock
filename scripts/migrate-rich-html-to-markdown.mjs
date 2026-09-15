@@ -220,7 +220,7 @@ export async function runMigration({ argv = process.argv.slice(2), env = process
 
   const prisma = isTurso
     ? new PrismaClient({ adapter: new PrismaLibSQL({ url: databaseUrl, authToken: env.TURSO_AUTH_TOKEN }) })
-    : new PrismaClient();
+    : new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 
   try {
     const result = await migrateRichNotes(prisma, { write });
