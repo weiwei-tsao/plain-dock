@@ -24,6 +24,9 @@ After:               ┌─ Edit:    CodeMirror
 - No scrollspy / IntersectionObserver-driven "active heading" tracking in the outline — click-to-scroll only.
 - No `Note.mode` database migration. The column, `NoteMode` enum, `NotePayload.mode`, and API validation all stay exactly as they are.
 - No new UI-selectable view-state persistence. Edit vs. Preview is ephemeral, per-session, per-note-open UI state.
+- No preservation of CodeMirror's own editor state across the Edit/Preview toggle (see below) — that's a separate, optional enhancement if it turns out to matter in practice.
+
+**Preview toggle unmounts CodeMirror.** `MarkdownEditor`'s `EditorView` is created on mount and destroyed on unmount (see `key={note.id}` remount-per-note comment in `EditorCanvas`). Switching `previewMode` from `false` to `true` unmounts `MarkdownEditor` (`EditorView.destroy()`); switching back to `false` mounts a fresh one from the current `content`. `content` itself is unaffected (it lives in `EditorCanvas` state, not in the editor instance), so this is not a data-loss bug — but CodeMirror-local state (undo/redo history, cursor position, selection, scroll position) is not preserved across a Preview round-trip. Acceptable for v1; keeping the `EditorView` permanently mounted and CSS-hiding it instead would preserve this state but isn't worth the complexity unless it turns out to bother users in practice.
 
 ## `Note.mode`: frozen, not removed
 
@@ -112,7 +115,7 @@ containerRef.current
 
 `@lezer/markdown` is already resolved in the lockfile as a transitive dependency of `@codemirror/lang-markdown` (`@lezer/markdown@1.7.2`). It gets promoted to a direct `dependencies` entry at that same pinned version — no new package is actually installed, just a direct declaration of what's already there.
 
-**GFM is required, not optional.** `terminal-table.ts`'s paste handler already converts pasted tables into real GFM pipe-table Markdown (`| a | b |` / `| --- | --- |`). Rendering without the GFM extension would make pasted tables look correct in Edit (CodeMirror also uses GFM highlighting) but degrade to raw pipe-text in Preview. So:
+**GFM is required, not optional.** `terminal-table.ts`'s paste handler already converts pasted tables into real GFM pipe-table Markdown (`| a | b |` / `| --- | --- |`) — that's what gets persisted to `content`. Without the GFM extension, Preview would parse that canonical stored Markdown as plain paragraph pipe-text instead of a table. (`MarkdownEditor.tsx` calls `markdown()` with no config, so Edit currently runs on `commonmarkLanguage` — CommonMark only, no GFM — not the GFM-enabled `markdownLanguage` CodeMirror also ships. Bringing Edit's parser config in line with Preview's is a reasonable follow-up but is out of scope here: it would add `MarkdownEditor.tsx` to this change and pull in GFM/Subscript/Superscript/Emoji highlighting behavior this feature doesn't need.)
 
 ```ts
 import { parser, GFM } from '@lezer/markdown';
@@ -121,19 +124,42 @@ const markdownParser = parser.configure(GFM);
 
 ### Traversal contract
 
-The Lezer tree is a **structural recognizer**, not a ready-made HTML AST — it exposes both semantic block/inline nodes *and* the syntax marker tokens that spell them out (`**` as `EmphasisMark`, `#` as `HeaderMark`, backticks as `CodeMark`, brackets/parens as `LinkMark`, etc). Naively "walking every node and emitting its leaves" double-renders markers and fights parent/child range overlap. The actual contract:
+The Lezer tree is a **structural recognizer**, not a ready-made HTML AST, and it is **gap-based**: there is no `Text` node type in `@lezer/markdown`'s node set. Plain text is never a child node — it's whatever lies *between* a node's children (and between a node's start and its first child, and its last child and its end) that isn't covered by any child. For `Hello **world**`, the tree is `Paragraph > Emphasis > (EmphasisMark, EmphasisMark)`, and `Hello ` is not a node at all — it's the source range from `Paragraph.from` to `Emphasis.from` that no child covers.
 
-- **Semantic nodes get an explicit renderer** that consumes the node's full source range and recurses only into its semantic children: `Paragraph`, `ATXHeading1`–`ATXHeading6`, `SetextHeading1`/`SetextHeading2`, `Blockquote`, `BulletList`, `OrderedList`, `TaskList`, `ListItem`, `Task`, `FencedCode`, `CodeBlock`, `Table`, `TableHeader`, `TableRow`, `TableCell`, `HorizontalRule`, `Emphasis`, `StrongEmphasis`, `Strikethrough`, `InlineCode`, `Link`, `Image`, `Autolink`, `LinkReference`, `HardBreak`, `Escape`, `Entity`.
-- **Syntax marker nodes are never rendered directly** and are skipped by the semantic renderers that own them: `HeaderMark`, `EmphasisMark`, `StrikethroughMark`, `CodeMark`, `CodeInfo`, `LinkMark`, `LinkLabel`, `LinkTitle`, `ListMark`, `QuoteMark`, `TableDelimiter`, `TaskMarker` (consumed only to read its checked/unchecked state, not rendered as text).
-- **`URL` nodes are consumed as data, not content** — inside `Link`/`Image`/`Autolink`, the `URL` child's source text becomes the `href`/`src` value (after the scheme check below); it is never recursed into as visible text.
+So every renderer for a container node (`Paragraph`, `Emphasis`, `StrongEmphasis`, `Blockquote`, headings, list items, table cells, etc.) must walk its children in order and **emit the escaped source gap before each child, and after the last child**, not just recurse into children:
+
+```ts
+function renderChildren(node: SyntaxNode, source: string): string {
+  let out = '';
+  let pos = node.from;
+  let child = node.firstChild;
+  while (child) {
+    out += escapeHtml(source.slice(pos, child.from)); // the gap
+    out += renderNode(child, source);                  // the child itself
+    pos = child.to;
+    child = child.nextSibling;
+  }
+  out += escapeHtml(source.slice(pos, node.to)); // trailing gap
+  return out;
+}
+```
+
+Marker-node renderers (see below) return `''`, so their range is skipped by the child render call but *not* double-counted as a gap (the gap logic only ever looks at the space *between* `pos` and the next child's `.from`, never inside a child's own range).
+
+The rest of the contract:
+
+- **Semantic nodes get an explicit renderer** using the gap-aware `renderChildren` above: `Document` (transparent — render its children/gaps directly, no wrapper element), `Paragraph`, `ATXHeading1`–`ATXHeading6`, `SetextHeading1`/`SetextHeading2`, `Blockquote`, `BulletList`, `OrderedList`, `ListItem`, `Task`, `FencedCode`, `CodeBlock`, `Table`, `TableHeader`, `TableRow`, `TableCell`, `HorizontalRule`, `Emphasis`, `StrongEmphasis`, `Strikethrough`, `InlineCode`, `Link`, `Image`, `Autolink`, `LinkReference`, `HardBreak`, `Escape`, `Entity`. (`Task` is the actual emitted node for a GFM task-list item — `TaskList` is only the name of the parser *extension* object in `@lezer/markdown`'s exports, not a node type that appears in the tree; task items live inside an ordinary `BulletList`.)
+- **Syntax marker nodes always render as `''`** (never their source, never a gap-eligible child): `HeaderMark`, `EmphasisMark`, `StrikethroughMark`, `CodeMark`, `CodeInfo`, `LinkMark`, `LinkLabel`, `LinkTitle`, `ListMark`, `QuoteMark`, `TableDelimiter`, `TaskMarker` (its only use is reading checked/unchecked state before returning `''`).
+- **`URL` nodes are consumed as data, not content** — inside `Link`/`Image`/`Autolink`, the `URL` child's source text becomes the `href`/`src` value (after the scheme check below); when rendering that node's own children via `renderChildren`, treat `URL` like a marker (contributes `''`, not visible text).
+- **`Escape` and `Entity` need semantic decoding, not a source slice**: `\*` must render as `*`, `&amp;` must render as `&` — render their *decoded* character(s), escaped for HTML, not their literal source text (which would print the backslash or re-emit the raw entity spelling).
 - **`HTMLBlock` and `HTMLTag`** are always rendered as escaped plain text of their own source range — raw HTML from note content is never passed through, regardless of how well-formed it looks.
-- **Any other/unknown node type** falls back to `escapeHtml(source.slice(node.from, node.to))` — escaped plain text of its full range. This is the fail-closed default: an unhandled node degrades to visible text, never to unescaped output.
+- **Any other/unknown node type** falls back to `escapeHtml(source.slice(node.from, node.to))` — escaped plain text of its full range. This is the fail-closed default: an unhandled node degrades to visible text, never to unescaped output. (This must never be `tree.topNode`'s own fallback — `Document` is explicitly handled above specifically so the whole document doesn't hit this branch.)
 
 ### `extractText(node)`: semantic text, not source slice
 
 Heading outline labels and slugs must reflect *visible* text, not raw Markdown source. `## Using **CodeMirror** with [Markdown](...)` must produce the outline label `Using CodeMirror with Markdown`, not the literal source with `**`/`[]()` still in it.
 
-`extractText(node)` walks the same node using the identical semantic/marker distinction as the HTML renderer (skip marker nodes, recurse into semantic/inline children, concatenate `Text`/`Escape`/`Entity` leaves), so heading text and rendered heading HTML content share one source of truth instead of two parallel implementations that can drift.
+`extractText(node)` uses the same gap-aware walk as the HTML renderer — source gaps contribute their literal text, marker children contribute nothing, `Escape`/`Entity` children contribute their decoded character, other semantic children recurse — so heading text and rendered heading HTML content share one traversal contract instead of two parallel implementations that can drift.
 
 ### Headings → outline
 
