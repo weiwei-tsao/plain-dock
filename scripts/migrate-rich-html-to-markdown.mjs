@@ -146,13 +146,14 @@ export function markdownToPlainTextForMigration(markdown) {
 export async function migrateRichNotes(prisma, { write }) {
   const notes = await prisma.note.findMany({ where: { mode: 'RICH' } });
   let converted = 0;
-  let skipped = 0;
+  let skippedEmpty = 0;
+  let skippedAlreadyMarkdown = 0;
   let failed = 0;
 
   for (const note of notes) {
     try {
       if (!note.content.trim()) {
-        skipped++;
+        skippedEmpty++;
         continue;
       }
       // Not idempotency-safe otherwise: a second run against already-migrated
@@ -172,7 +173,7 @@ export async function migrateRichNotes(prisma, { write }) {
       const HTML_BLOCK_TAG =
         /<(p|div|h[1-6]|ul|ol|li|pre|blockquote|table|tr|t[dh]|img|br|hr)\b[^>]*>/i;
       if (!HTML_BLOCK_TAG.test(note.content)) {
-        skipped++;
+        skippedAlreadyMarkdown++;
         continue;
       }
       const markdown = htmlToMarkdown(note.content);
@@ -197,7 +198,7 @@ export async function migrateRichNotes(prisma, { write }) {
     }
   }
 
-  return { converted, skipped, failed, total: notes.length };
+  return { converted, skippedEmpty, skippedAlreadyMarkdown, failed, total: notes.length };
 }
 
 function printUsage() {
@@ -271,7 +272,9 @@ export async function runMigration({ argv = process.argv.slice(2), env = process
   try {
     const result = await migrateRichNotes(prisma, { write });
     console.log(
-      `Converted: ${result.converted}, skipped (empty): ${result.skipped}, failed: ${result.failed}, total RICH notes: ${result.total}`,
+      `Converted: ${result.converted}, skipped (empty): ${result.skippedEmpty}, ` +
+        `skipped (already Markdown): ${result.skippedAlreadyMarkdown}, failed: ${result.failed}, ` +
+        `total RICH notes: ${result.total}`,
     );
     if (backupPath) console.log(`Backup created: ${backupPath}`);
     if (!write) console.log('Dry run only - re-run with --write to persist changes.');

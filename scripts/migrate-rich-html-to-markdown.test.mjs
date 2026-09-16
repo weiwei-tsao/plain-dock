@@ -85,6 +85,30 @@ describe('markdownToPlainTextForMigration', () => {
   });
 });
 
+describe('migrateRichNotes skip reasons', () => {
+  it('counts a genuinely empty note under skippedEmpty, not skippedAlreadyMarkdown', async () => {
+    const update = vi.fn();
+    const emptyNote = { id: 'note-0', content: '   ', mode: 'RICH' };
+    const fakePrisma = {
+      note: {
+        findMany: vi.fn().mockResolvedValue([emptyNote]),
+        update,
+      },
+    };
+
+    const result = await migrateRichNotes(fakePrisma, { write: true });
+
+    expect(update).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      converted: 0,
+      skippedEmpty: 1,
+      skippedAlreadyMarkdown: 0,
+      failed: 0,
+      total: 1,
+    });
+  });
+});
+
 describe('migrateRichNotes idempotency (Fix 1)', () => {
   it('skips a note whose content is already Markdown instead of blanking it out', async () => {
     // A fully fake, self-contained prisma stand-in - no PrismaClient involved at
@@ -105,7 +129,13 @@ describe('migrateRichNotes idempotency (Fix 1)', () => {
     const result = await migrateRichNotes(fakePrisma, { write: true });
 
     expect(update).not.toHaveBeenCalled();
-    expect(result).toEqual({ converted: 0, skipped: 1, failed: 0, total: 1 });
+    expect(result).toEqual({
+      converted: 0,
+      skippedEmpty: 0,
+      skippedAlreadyMarkdown: 1,
+      failed: 0,
+      total: 1,
+    });
   });
 
   it('skips already-migrated Markdown containing an inline <u> tag, not just plain Markdown', async () => {
@@ -131,7 +161,13 @@ describe('migrateRichNotes idempotency (Fix 1)', () => {
     const result = await migrateRichNotes(fakePrisma, { write: true });
 
     expect(update).not.toHaveBeenCalled();
-    expect(result).toEqual({ converted: 0, skipped: 1, failed: 0, total: 1 });
+    expect(result).toEqual({
+      converted: 0,
+      skippedEmpty: 0,
+      skippedAlreadyMarkdown: 1,
+      failed: 0,
+      total: 1,
+    });
   });
 
   it('still converts real first-run HTML that happens to contain a <u> tag', async () => {
@@ -164,7 +200,13 @@ describe('migrateRichNotes idempotency (Fix 1)', () => {
         textContent: '<u>underlined</u> and more text',
       },
     });
-    expect(result).toEqual({ converted: 1, skipped: 0, failed: 0, total: 1 });
+    expect(result).toEqual({
+      converted: 1,
+      skippedEmpty: 0,
+      skippedAlreadyMarkdown: 0,
+      failed: 0,
+      total: 1,
+    });
   });
 });
 
