@@ -57,6 +57,20 @@ describe('htmlToMarkdown', () => {
     expect(htmlToMarkdown('<ol><li>one</li><li>two</li></ol>')).toBe('1. one\n2. two');
   });
 
+  it('continues an ordered list from its start attribute', () => {
+    // Found spot-checking a real migrated note: <ol start="2"> (continuing a
+    // numbered list across an interposed <ul>) was silently renumbered from
+    // 1 - the URLs/text survived, but the displayed numbering no longer
+    // matched the author's original list.
+    const html = '<ol start="2"><li>two</li><li>three</li></ol>';
+    expect(htmlToMarkdown(html)).toBe('2. two\n3. three');
+  });
+
+  it('applies start on a nested ordered list too', () => {
+    const html = '<ul><li>Item one<ol start="5"><li>five</li><li>six</li></ol></li></ul>';
+    expect(htmlToMarkdown(html)).toBe('- Item one\n  5. five\n  6. six');
+  });
+
   it('converts a code block', () => {
     expect(htmlToMarkdown('<pre><code>const x = 1;</code></pre>')).toBe('```\nconst x = 1;\n```');
   });

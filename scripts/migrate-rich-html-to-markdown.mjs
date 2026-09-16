@@ -64,6 +64,13 @@ function block(node) {
     }
     case 'ul':
     case 'ol': {
+      // <ol start="N"> continues a numbered list across an interruption
+      // (e.g. a <ul> or <blockquote> spliced in between two <ol> halves) -
+      // ignoring it silently renumbers from 1, which most Markdown
+      // renderers take literally (they follow the first number, not the
+      // author's intent from the original HTML).
+      const startAttr = tag === 'ol' ? parseInt(el.getAttribute('start') ?? '', 10) : NaN;
+      const start = Number.isNaN(startAttr) ? 1 : startAttr;
       const items = Array.from(el.children).map((li, i) => {
         const nested = Array.from(li.children).find((c) =>
           ['ul', 'ol'].includes(c.tagName?.toLowerCase()),
@@ -73,7 +80,7 @@ function block(node) {
           .map((c) => inline(c))
           .join('')
           .trim();
-        const prefix = tag === 'ul' ? '- ' : `${i + 1}. `;
+        const prefix = tag === 'ul' ? '- ' : `${start + i}. `;
         if (!nested) return `${prefix}${ownText}`;
         const nestedMd = block(nested)
           .trim()
