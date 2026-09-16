@@ -120,6 +120,15 @@ export function htmlToMarkdown(html) {
     .trim();
 }
 
+// Distinguishes "no visible text at all" (e.g. `<p></p>`, `<p></p><p></p>` —
+// an editor's leftover empty-paragraph placeholder) from real content, since
+// the former's raw string is non-empty but has nothing for htmlToMarkdown to
+// convert.
+export function hasVisibleText(html) {
+  const dom = new JSDOM(`<body>${html}</body>`);
+  return (dom.window.document.body.textContent ?? '').trim() !== '';
+}
+
 // ponytail: duplicated (not imported) from src/lib/markdown/text-projection.ts —
 // this script runs as plain .mjs directly under node, outside the TS/path-alias
 // build pipeline, and is deleted after the one-time migration anyway. Kept in
@@ -177,10 +186,17 @@ export async function migrateRichNotes(prisma, { write }) {
         continue;
       }
       const markdown = htmlToMarkdown(note.content);
-      if (markdown === '' && note.content.trim() !== '') {
+      // An empty result is only suspicious if the source HTML actually had
+      // visible text — e.g. `<p></p>` (an editor's leftover empty-paragraph
+      // placeholder for a note the user cleared) has no text at all, so an
+      // empty Markdown result is the correct conversion, not a failure.
+      // Checking note.content.trim() !== '' isn't enough: that's non-empty
+      // as a raw string (it's still "<p></p>") even though it has zero
+      // visible text once parsed.
+      if (markdown === '' && hasVisibleText(note.content)) {
         failed++;
         console.error(
-          `Failed to convert note ${note.id}: conversion produced empty Markdown from non-empty HTML content - refusing to write.`,
+          `Failed to convert note ${note.id}: conversion produced empty Markdown from HTML content that has visible text - refusing to write.`,
         );
         continue;
       }

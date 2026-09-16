@@ -109,6 +109,38 @@ describe('migrateRichNotes skip reasons', () => {
   });
 });
 
+describe('migrateRichNotes empty-HTML handling', () => {
+  it('converts a note whose HTML has no visible text (e.g. <p></p>) instead of marking it failed', async () => {
+    // Found running a real dry-run against Docker data: an editor can leave
+    // an empty-paragraph placeholder behind after the user clears all text.
+    // note.content.trim() is non-empty (it's literally "<p></p>"), so the
+    // naive check would wrongly treat the correct empty conversion result
+    // as a failure and refuse to write it.
+    const update = vi.fn();
+    const emptyParagraphNote = { id: 'note-4', content: '<p></p><p></p>', mode: 'RICH' };
+    const fakePrisma = {
+      note: {
+        findMany: vi.fn().mockResolvedValue([emptyParagraphNote]),
+        update,
+      },
+    };
+
+    const result = await migrateRichNotes(fakePrisma, { write: true });
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'note-4' },
+      data: { content: '', textContent: '' },
+    });
+    expect(result).toEqual({
+      converted: 1,
+      skippedEmpty: 0,
+      skippedAlreadyMarkdown: 0,
+      failed: 0,
+      total: 1,
+    });
+  });
+});
+
 describe('migrateRichNotes idempotency (Fix 1)', () => {
   it('skips a note whose content is already Markdown instead of blanking it out', async () => {
     // A fully fake, self-contained prisma stand-in - no PrismaClient involved at
