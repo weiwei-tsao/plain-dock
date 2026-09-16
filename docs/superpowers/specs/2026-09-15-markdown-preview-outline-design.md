@@ -2,6 +2,8 @@
 
 ## Summary
 
+**Product intent (confirmed 2026-09-16):** Writing Markdown is the primary workflow. Preview lets the writer check the current draft's formatting and read long notes with heading navigation, then continue writing where they left off. Notes open in Edit; Preview renders the current in-memory content, including changes awaiting autosave.
+
 `content` is already canonical Markdown/plain-text regardless of `Note.mode` — `markdownToPlainText()` no longer branches on mode, and the only thing PLAIN/RICH still controls is which editor surface (`<textarea>` vs CodeMirror) renders that same string. This change removes that UI-level fork entirely: every note gets one editor (CodeMirror, Markdown-aware), and a new **Preview** view renders the Markdown as HTML with a heading-based outline on the left.
 
 This is the last step of a longer migration:
@@ -24,9 +26,17 @@ After:               ┌─ Edit:    CodeMirror
 - No scrollspy / IntersectionObserver-driven "active heading" tracking in the outline — click-to-scroll only.
 - No `Note.mode` database migration. The column, `NoteMode` enum, `NotePayload.mode`, and API validation all stay exactly as they are.
 - No new UI-selectable view-state persistence. Edit vs. Preview is ephemeral, per-session, per-note-open UI state.
-- No preservation of CodeMirror's own editor state across the Edit/Preview toggle (see below) — that's a separate, optional enhancement if it turns out to matter in practice.
+- No editor-state persistence across a page reload or switching away from the current note. State preservation below applies to Edit/Preview round-trips within the currently open note.
 
-**Preview toggle unmounts CodeMirror.** `MarkdownEditor`'s `EditorView` is created on mount and destroyed on unmount (see `key={note.id}` remount-per-note comment in `EditorCanvas`). Switching `previewMode` from `false` to `true` unmounts `MarkdownEditor` (`EditorView.destroy()`); switching back to `false` mounts a fresh one from the current `content`. `content` itself is unaffected (it lives in `EditorCanvas` state, not in the editor instance), so this is not a data-loss bug — but CodeMirror-local state (undo/redo history, cursor position, selection, scroll position) is not preserved across a Preview round-trip. Acceptable for v1; keeping the `EditorView` permanently mounted and CSS-hiding it instead would preserve this state but isn't worth the complexity unless it turns out to bother users in practice.
+## Preserve the writing session across Preview
+
+**Confirmed 2026-09-16:** Edit → Preview → Edit must preserve the current note's undo/redo history, cursor position, selection, and editor scroll position. This replaces the original proposal to discard editor-local state on every toggle.
+
+Keep the current note's `MarkdownEditor` and its `EditorView` mounted while Preview is visible. Hide the editor and exclude it from keyboard navigation and the accessibility tree; keep its state in memory. Preview has its own scroll container, so reading or following an outline entry does not change the saved editing position. On returning to Edit, restore the editor's scrolling after it becomes visible and has measured its layout. Retaining the React component alone is not sufficient evidence that browser scrolling is preserved.
+
+This approach keeps CodeMirror's existing state together. Destroying and reconstructing the editor from an explicit state snapshot is an alternative, but adds lifecycle and scroll-restoration work without a product benefit here. Retaining a mounted editor uses memory while previewing; only the current note's editor is retained, not a cache of editors for previously opened notes.
+
+Switching notes still starts in Edit with a fresh editor for the selected note. The toggle does not convert content, change `Note.mode`, or cancel pending autosave. A pending image paste for the same note can complete against the retained editor and update Preview; the existing note-identity guard must still prevent insertion into a different note.
 
 ## `Note.mode`: frozen, not removed
 
@@ -40,7 +50,6 @@ Ephemeral local state in `EditorCanvas`, reset alongside the existing note-sync 
 const [previewMode, setPreviewMode] = useState(false);
 
 useEffect(() => {
-  currentModeRef.current = note.mode;
   if (syncedNoteIdRef.current === note.id) return;
   syncedNoteIdRef.current = note.id;
   setContent(note.content);
@@ -49,7 +58,7 @@ useEffect(() => {
   setSaveState('IDLE');
   setPreviewMode(false); // always open a note in Edit
   ...
-}, [note.id, note.title, note.content, note.mode, autoFocus, onAutoFocusHandled]);
+}, [note.id, note.title, note.content, autoFocus, onAutoFocusHandled]);
 ```
 
 ## Component architecture
@@ -60,7 +69,7 @@ EditorCanvas
 │   └── Preview/Edit toggle button (replaces the old mode-switch button)
 ├── RichToolbar          ← rendered only when !previewMode
 └── body
-    ├── MarkdownEditor    ← !previewMode (unchanged; always the RICH-mode editor, now the only one)
+    ├── MarkdownEditor    ← always mounted for the current note; hidden in Preview
     └── MarkdownPreview   ← previewMode
         ├── MarkdownOutline
         └── rendered HTML body
@@ -70,10 +79,10 @@ EditorCanvas
 - Delete the `<textarea>` branch, `textareaRef`, the auto-resize effect, the PLAIN paste-image handler branch, and every `note.mode === NoteMode.PLAIN/RICH` conditional except the ones needed to freeze `mode` on save.
 - Delete `handleSwitchMode` and both mode-switch buttons (mobile + desktop). Replace with a Preview/Edit toggle (`Eye`/`Pencil` icons from `lucide-react`) that flips local `previewMode` — no `persistChange` call, since this is not saved state.
 - `RichToolbar` render condition changes from `note.mode === NoteMode.RICH` to `!previewMode`.
-- Editor body renders `<MarkdownEditor>` when `!previewMode`, else `<MarkdownPreview content={content} />`.
+- Editor body keeps `<MarkdownEditor>` mounted in a stable position with the current note's key. Its wrapper is hidden in Preview; `<MarkdownPreview content={content} />` is shown alongside it only in Preview. Toggling must not replace or re-key the editor or its scroll container.
 - Footer badge that currently shows `{note.mode}` switches to reflect `previewMode` (`EDIT` / `PREVIEW`) purely as a display label — word/char counts are unaffected (already computed from `content` via `markdownToPlainText`, independent of view).
 
-`EditorCanvas` does **not** know about HTML, headings, slugs, or GFM — it only branches on `previewMode` and passes `content` through. `MarkdownPreview` owns parsing:
+`EditorCanvas` does **not** know about HTML, headings, slugs, or GFM — it controls visibility and editing-position restoration, and passes `content` through. `MarkdownPreview` owns parsing:
 
 ```ts
 // MarkdownPreview.tsx
@@ -222,12 +231,20 @@ Rendered Markdown elements (`h1`–`h6`, `p`, `code`, `pre`, `blockquote`, `ul`/
 
 Manual check after implementation: paste a terminal table and a screenshot into a note, confirm both render correctly in Preview; confirm Edit ⇄ Preview toggle and RichToolbar visibility behave correctly on phone/tablet/desktop widths.
 
+Browser acceptance checks for the writing session:
+- Type a distinctive change and immediately open Preview, before the autosave debounce fires: Preview shows the latest draft, and saving still completes.
+- In a long note, select text away from the top and record the editor's scroll position. Open Preview, scroll elsewhere or follow an outline entry, then return to Edit: the selection and editing scroll position are preserved. Repeat the round-trip.
+- Undo an edit made before entering Preview, then redo it: both operations still work after returning to Edit.
+- Keyboard navigation in Preview cannot enter the hidden editor. Returning to Edit exposes the retained editor normally.
+- Switch to another note while previewing: it opens in Edit, with its own content and no selection or undo history inherited from the previous note.
+- Start an image paste, then open Preview before resizing completes: the image appears in the same note's preview and remains present on return to Edit.
+
 ## Files touched
 
 1. `src/lib/markdown/render-html.ts` — new. `renderMarkdown(content): { html, headings }`, `escapeHtml`, `escapeAttribute`, URL scheme checks, slugger, `extractText`.
 2. `src/lib/markdown/render-html.test.ts` — new.
 3. `src/components/editor/MarkdownPreview.tsx` — new.
 4. `src/components/editor/MarkdownOutline.tsx` — new.
-5. `src/components/editor/EditorCanvas.tsx` — remove PLAIN branch, mode-switch UI/handler; add `previewMode` state + toggle; conditional render.
+5. `src/components/editor/EditorCanvas.tsx` — remove PLAIN branch, mode-switch UI/handler; add `previewMode` state + toggle; retain the editor while previewing and restore editing scroll position.
 6. `src/app/globals.css` — add `.md-preview` styles.
 7. `package.json` — promote `@lezer/markdown` from transitive to direct dependency (pinned `1.7.2`, matching the already-resolved lockfile version).

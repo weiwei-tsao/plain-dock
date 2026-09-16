@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Requirements revision — 2026-09-16; execution remains paused for requirements alignment.** The user confirmed a writing-first workflow and preservation of undo/redo history, cursor/selection, and editing scroll position across Edit → Preview → Edit for the current note. The design spec's “Preserve the writing session across Preview” section supersedes this plan's original unmount-on-toggle approach. Task 12's toggle/lifecycle steps (especially Step 9's conditional editor mount) must be revised, and Task 13 must cover the new browser acceptance checks, before this plan is dispatched. The code examples below are not yet an executable plan for the revised requirement.
+
 **Goal:** Replace the PLAIN/RICH editor toggle with a single Markdown editor plus a Preview view that renders the note's Markdown as HTML with a heading-based outline on the left.
 
-**Architecture:** A new pure module (`src/lib/markdown/render-html.ts`) parses Markdown with `@lezer/markdown` (GFM-configured) and walks the resulting syntax tree once to produce both an HTML string and a heading list, escaping all text/attributes and allowlisting link/image URL schemes as it goes. `EditorCanvas` drops its PLAIN `<textarea>` branch entirely and gains a local, ephemeral `previewMode` flag that swaps the CodeMirror editor for a new `MarkdownPreview` component (which owns rendering) wrapping a new `MarkdownOutline` component (click-to-scroll heading list).
+**Architecture:** A new pure module (`src/lib/markdown/render-html.ts`) parses Markdown with `@lezer/markdown` (GFM-configured) and walks the resulting syntax tree once to produce both an HTML string and a heading list, escaping all text/attributes and allowlisting link/image URL schemes as it goes. `EditorCanvas` drops its PLAIN `<textarea>` branch entirely and gains a local, ephemeral `previewMode` flag. The current note's CodeMirror editor stays mounted but hidden during Preview; a new `MarkdownPreview` component owns rendering and wraps a new `MarkdownOutline` component (click-to-scroll heading list).
 
 **Tech Stack:** Next.js/React/TypeScript, `@lezer/markdown` + `@lezer/common` (promoted from transitive to direct dependencies, versions already resolved in the lockfile), Vitest.
 
@@ -16,7 +18,8 @@
 - No HTML sanitizer library is added. `render-html.ts` **is** the sanitizer: every text node goes through `escapeHtml()`, every attribute through `escapeAttribute()`, and `<a href>` / `<img src>` are scheme-allowlisted before being written out. `dangerouslySetInnerHTML` appears exactly once in the whole codebase, in `MarkdownPreview.tsx`, fed only by this renderer's output.
 - GFM is required: `import { parser, GFM } from '@lezer/markdown'; const markdownParser = parser.configure(GFM);` — without it, pasted tables (`terminal-table.ts`'s output) parse as plain pipe-text instead of a table.
 - `@lezer/markdown` is pinned to `1.7.2` and `@lezer/common` to `1.5.2` as direct dependencies — both versions are already resolved in the lockfile as transitive deps of `@codemirror/lang-markdown`; this is a `package.json` declaration change, not a new install.
-- No syntax highlighting in the rendered preview, no scrollspy in the outline (click-to-scroll only), no new view-state persistence, no preservation of CodeMirror's undo/selection/scroll state across the Edit/Preview toggle — all explicit non-goals in the spec.
+- No syntax highlighting in the rendered preview, no scrollspy in the outline (click-to-scroll only), no new view-state persistence across reloads or switching notes.
+- Edit → Preview → Edit must preserve the current note's undo/redo history, cursor position, selection, and editor scroll position. Keep the current editor instance mounted; preview scrolling must not change the editing position. Preview uses current in-memory content, and toggling does not cancel pending autosave.
 - Dark zinc/indigo palette only (`.claude/rules/styling.md`), no `@tailwindcss/typography` or other new styling dependency — hand-written CSS in `globals.css`, matching the existing pattern for CodeMirror (`markdown-theme.ts`) and the scrollbar.
 - Every renderer code snippet in this plan has been run against the real `@lezer/markdown` parser (not guessed) — the exact HTML strings in the test assertions below are verified output, not predictions.
 
