@@ -173,7 +173,16 @@ interface Heading {
 }
 ```
 
-Slug: lowercase `text`, strip everything outside `[a-z0-9]`, collapse runs of separators to a single `-`, trim leading/trailing `-`. Collisions within one document get a numeric suffix: `test`, `test-2`, `test-3`. The same `id` is written as the `id` attribute on the corresponding `<h1>`–`<h6>` in the rendered HTML, so outline clicks and in-page anchors share the identical id space.
+Slug must handle non-Latin headings (Chinese, Japanese, etc. are ordinary note content here) — restricting to `[a-z0-9]` would collapse `# 架构设计` and `# 预览模式` to `id=""` and `id="-2"`, producing an invalid `<h1 id="">` anchor and a broken `#` selector at click time. Since the id is written through `escapeAttribute()` on the way into the HTML and read back through `CSS.escape()` on the way into `querySelector` (see `MarkdownOutline.tsx` above), there's no reason to restrict the character set to ASCII — both call sites already handle arbitrary characters safely:
+
+```ts
+text
+  .toLowerCase()
+  .replace(/[^\p{L}\p{N}]+/gu, '-') // keep Unicode letters/numbers, everything else is a separator
+  .replace(/^-+|-+$/g, '');         // trim leading/trailing '-'
+```
+
+`架构设计` → `架构设计`, `Hello 世界` → `hello-世界`. If a heading has no letters or numbers at all (e.g. `# !!!`), the result is empty — fall back to the literal string `section` in that case, before dedup. Collisions within one document (including the empty-heading fallback) get a numeric suffix: `test`, `test-2`, `test-3` / `架构设计`, `架构设计-2` / `section`, `section-2`. The same `id` is written as the `id` attribute on the corresponding `<h1>`–`<h6>` in the rendered HTML, so outline clicks and in-page anchors share the identical id space.
 
 `renderMarkdown(content)` returns `{ html, headings }` from one parse + one traversal — `MarkdownPreview` is the only caller.
 
@@ -202,6 +211,7 @@ Rendered Markdown elements (`h1`–`h6`, `p`, `code`, `pre`, `blockquote`, `ul`/
 
 `src/lib/markdown/render-html.test.ts`:
 - Headings → outline: levels, dedup suffixing (`# Test` × 3 → `test`, `test-2`, `test-3`).
+- Non-Latin heading slugs: `# 架构设计` × 2 → `{ text: '架构设计', id: '架构设计' }`, `{ text: '架构设计', id: '架构设计-2' }` (pins the Unicode-preserving slugger, not an ASCII-only one that would collapse both to `id=""`).
 - Heading with inline formatting: `# Hello **world**` and `# Hello world` in the same doc → outline text `Hello world` for both, slugs `hello-world` / `hello-world-2` (pins the semantic-text rule from `extractText`).
 - XSS: `<script>alert(1)</script>` in a paragraph renders as escaped text, never executes.
 - Raw HTML block passthrough attempt renders as escaped text.
