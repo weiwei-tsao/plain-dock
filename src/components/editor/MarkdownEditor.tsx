@@ -8,6 +8,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting } from '@codemirror/language';
 import { markdownHighlightStyle, markdownEditorTheme } from './markdown-theme';
+import { markdownDecorations } from './markdown-decorations';
 import { searchHighlightExtension, getFirstMatchPos } from './markdown-search-highlight';
 import type { FormattingResult } from '@/lib/markdown/formatting';
 
@@ -54,6 +55,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
           markdown(),
           syntaxHighlighting(markdownHighlightStyle),
           markdownEditorTheme,
+          markdownDecorations,
           EditorView.lineWrapping,
           searchCompartment.of(searchHighlightExtension(searchQuery)),
           EditorView.updateListener.of((update) => {
