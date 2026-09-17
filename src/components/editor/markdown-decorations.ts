@@ -77,23 +77,4 @@ const field = StateField.define<DecorationSet>({
   provide: (value) => EditorView.decorations.from(value),
 });
 
-const copyHandler = EditorView.domEventHandlers({
-  copy(event, view) {
-    const selection = view.state.selection;
-    const text = selection.ranges.some((range) => !range.empty)
-      ? selection.ranges
-          .filter((range) => !range.empty)
-          .map((range) => view.state.sliceDoc(range.from, range.to))
-          .join(view.state.lineBreak)
-      : selection.ranges
-          .map((range) => view.state.doc.lineAt(range.from).text)
-          .join(view.state.lineBreak);
-    if (!event.clipboardData || !text) return false;
-    event.preventDefault();
-    event.clipboardData.clearData();
-    event.clipboardData.setData('text/plain', text);
-    return true;
-  },
-});
-
-export const markdownDecorations: Extension = [field, copyHandler];
+export const markdownDecorations: Extension = field;

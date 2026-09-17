@@ -59,4 +59,46 @@ npm run typecheck        passed
 
 ## Self-review and concerns
 
-The implementation uses the supplied parser node names and keeps line decorations in a state field, so offscreen code lines are represented directly in the view. The copy test's synthetic jsdom event does not establish CodeMirror's native DOM selection observer; the extension therefore handles copy from the logical EditorState selection and preserves source Markdown. No parser configuration, language highlighting, or document mutation was added.
+The implementation uses the supplied parser node names and keeps line decorations in a state field, so offscreen code lines are represented directly in the view. No parser configuration, language highlighting, document mutation, or copy override was added.
+
+## Review follow-up: native copy semantics
+
+Removed the unrequested `EditorView.domEventHandlers({ copy })` override. `markdownDecorations` now exports only its presentation `StateField`; native CodeMirror owns copy behavior, including DOM-selection ownership, `clipboardOutputFilter`, linewise copy, and same-line multicaret deduplication.
+
+The copy test now mounts a real `EditorView`, focuses it, installs a real DOM `Range` inside `contentDOM`, dispatches `selectionchange`, and dispatches a bubbling copy event with clipboard data. It asserts both that CodeMirror invokes `EditorView.clipboardOutputFilter` and that the clipboard receives the original source Markdown (`x \`code\` y`) even when delimiters are visually replaced. This exercises CodeMirror's native handler rather than a decoration-supplied handler.
+
+### RED
+
+Command:
+
+```text
+npm test -- src/components/editor/markdown-decorations.test.ts
+```
+
+Result before removing the override:
+
+```text
+× Markdown presentation decorations > uses CodeMirror native copy for hidden code delimiters
+→ expected [] to deeply equal [ 'x `code` y' ]
+```
+
+The override copied source text directly but bypassed `clipboardOutputFilter`, so the native-handler test correctly failed.
+
+### GREEN and validation
+
+```text
+npm test -- src/components/editor/markdown-decorations.test.ts
+Test Files  1 passed (1)
+Tests  7 passed (7)
+
+npm run lint
+passed
+
+npm run format:check
+All matched files use Prettier code style!
+
+npm run typecheck
+passed
+```
+
+Typecheck initially identified a test-only `never[]` inference for `mount`'s optional extension list. Typing it as `Extension[]` fixed that issue; the focused test and all required checks then passed.

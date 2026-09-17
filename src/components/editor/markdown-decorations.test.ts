@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { EditorSelection, EditorState } from '@codemirror/state';
+import { type Extension, EditorSelection, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { history, undo, redo } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
@@ -11,12 +11,12 @@ afterEach(() => {
   view?.destroy();
   document.body.replaceChildren();
 });
-function mount(doc: string) {
+function mount(doc: string, extensions: Extension[] = []) {
   view = new EditorView({
     parent: document.body,
     state: EditorState.create({
       doc,
-      extensions: [markdown(), history(), markdownDecorations],
+      extensions: [markdown(), history(), markdownDecorations, extensions],
     }),
   });
   return view;
@@ -89,9 +89,23 @@ describe('Markdown presentation decorations', () => {
     expect(redo(v)).toBe(true);
     expect(v.state.doc.toString()).toBe('edit ' + before);
   });
-  it('copies original Markdown through CodeMirror even when code is visually hidden', () => {
-    const v = mount('x `code` y');
+  it('uses CodeMirror native copy for hidden code delimiters', () => {
+    const source = 'x `code` y';
     const copied: Record<string, string> = {};
+    const filtered: string[] = [];
+    const v = mount(source, [
+      EditorView.clipboardOutputFilter.of((text) => {
+        filtered.push(text);
+        return text;
+      }),
+    ]);
+    v.focus();
+    const selection = document.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(v.contentDOM);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
     const event = new Event('copy', { bubbles: true, cancelable: true });
     Object.defineProperty(event, 'clipboardData', {
       value: {
@@ -102,6 +116,7 @@ describe('Markdown presentation decorations', () => {
       },
     });
     v.contentDOM.dispatchEvent(event);
-    expect(copied['text/plain']).toBe('x `code` y');
+    expect(filtered).toEqual([source]);
+    expect(copied['text/plain']).toBe(source);
   });
 });
