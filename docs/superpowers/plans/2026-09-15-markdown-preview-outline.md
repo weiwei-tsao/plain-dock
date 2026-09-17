@@ -8,7 +8,7 @@
 
 **Goal:** Replace the PLAIN/RICH editor toggle with a single Markdown editor plus a Preview view that renders the note's Markdown as HTML with a heading-based outline on the left.
 
-> **Editor readability decisions — approved 2026-09-16.** The user approved showing inline-code delimiters while the cursor/selection is in the code span and hiding them otherwise, without changing Markdown content or undo history. Add a focused editor-decoration task and interaction verification before dispatching this plan. The shared color specification in `docs/superpowers/specs/2026-09-16-markdown-color-guidelines.md` is approved and binding. Revise Tasks 10–12 plus the editor theme to use the shared tokens instead of the old literal colors. Use one amber code token for inline and block code; retain separate secondary/syntax tokens. Visual assessment of large code blocks follows implementation.
+> **Editor readability decisions — approved 2026-09-16.** The user approved showing inline-code delimiters while the cursor/selection is in the code span and hiding them otherwise, without changing Markdown content or undo history. Add a focused editor-decoration task and interaction verification before dispatching this plan. The shared color specification in `docs/superpowers/specs/2026-09-16-markdown-color-guidelines.md` is approved and binding. The authoritative revised Tasks 10–15 use the shared tokens instead of the old literal colors. Use one amber code token for inline and block code; retain separate secondary/syntax tokens. Visual assessment of large code blocks follows implementation.
 
 **Architecture:** A new pure module (`src/lib/markdown/render-html.ts`) parses Markdown with `@lezer/markdown` (GFM-configured) and walks the resulting syntax tree once to produce both an HTML string and a heading list, escaping all text/attributes and allowlisting link/image URL schemes as it goes. `EditorCanvas` drops its PLAIN `<textarea>` branch entirely and gains a local, ephemeral `previewMode` flag. The current note's CodeMirror editor stays mounted but hidden during Preview; a new `MarkdownPreview` component owns rendering and wraps a new `MarkdownOutline` component (click-to-scroll heading list).
 
@@ -216,6 +216,17 @@ describe('_assignHeadingId', () => {
     expect(_assignHeadingId('Test', seen)).toBe('test-3');
   });
 
+  it('also reserves generated IDs against naturally suffixed headings', () => {
+    const seen = new Map<string, number>();
+    expect(_assignHeadingId('Test', seen)).toBe('test');
+    expect(_assignHeadingId('Test', seen)).toBe('test-2');
+    expect(_assignHeadingId('Test-2', seen)).toBe('test-2-2');
+    const reversed = new Map<string, number>();
+    expect(_assignHeadingId('Test-2', reversed)).toBe('test-2');
+    expect(_assignHeadingId('Test', reversed)).toBe('test');
+    expect(_assignHeadingId('Test', reversed)).toBe('test-3');
+  });
+
   it('falls back to "section" when the heading has no letters or numbers', () => {
     const seen = new Map<string, number>();
     expect(_assignHeadingId('!!!', seen)).toBe('section');
@@ -244,9 +255,15 @@ function slugifyText(text: string): string {
 
 export function _assignHeadingId(text: string, seen: Map<string, number>): string {
   const base = slugifyText(text);
-  const count = seen.get(base) ?? 0;
+  let count = seen.get(base) ?? 0;
+  let id = count === 0 ? base : `${base}-${count + 1}`;
+  while (seen.has(id)) {
+    count += 1;
+    id = `${base}-${count + 1}`;
+  }
   seen.set(base, count + 1);
-  return count === 0 ? base : `${base}-${count + 1}`;
+  seen.set(id, 1);
+  return id;
 }
 ```
 
@@ -279,7 +296,7 @@ This is the foundational task: it establishes the traversal contract every later
 
 - [ ] **Step 1: Promote `@lezer/markdown` and `@lezer/common` to direct dependencies**
 
-In `package.json`, in the `"dependencies"` block, insert alphabetically (both versions already resolved in the lockfile — confirm with `npm ls @lezer/markdown @lezer/common` before editing, no install should be triggered):
+In `package.json`, in the `"dependencies"` block, insert alphabetically (confirm both versions already resolve using `npm ls @lezer/markdown @lezer/common` before editing; no package version changes are needed):
 
 ```json
     "@lezer/common": "1.5.2",
@@ -289,12 +306,12 @@ In `package.json`, in the `"dependencies"` block, insert alphabetically (both ve
 
 (`@lezer/highlight` is the existing entry — `@lezer/common` goes immediately before it, `@lezer/markdown` immediately after it, keeping the block alphabetical.)
 
-Run: `npm install`
-Expected: `package-lock.json` updates only the `dependencies` linkage for these two packages, not their versions (both are already resolved at these exact versions as transitive deps — confirmed above). Whether npm's registry check causes any output isn't a pass/fail signal here; the thing to actually verify is that `@lezer/markdown` and `@lezer/common` still resolve to `1.7.2` and `1.5.2` after the install (`npm ls @lezer/markdown @lezer/common`).
+Run: `npm install --package-lock-only --ignore-scripts --offline --no-audit --no-fund`
+Expected: `package-lock.json` updates the root `dependencies` linkage for these two already-resolved packages without changing their resolved versions or running lifecycle scripts. Verify the diff and `npm ls @lezer/markdown @lezer/common`: versions must remain `1.7.2` and `1.5.2`. If local metadata cannot satisfy the offline command, investigate the missing metadata before using a registry-backed install; do not regenerate unrelated lockfile entries.
 
 - [ ] **Step 2: Write the failing tests**
 
-Add to `src/lib/markdown/render-html.test.ts` (this replaces the ad-hoc `_assignHeadingId` import test setup — from here on, tests exercise the public `renderMarkdown` API):
+Add to `src/lib/markdown/render-html.test.ts`. Keep Task 2's helper import and tests until Task 6 replaces them with public heading tests; the new cases below exercise `renderMarkdown`:
 
 ```ts
 import { renderMarkdown } from './render-html';
@@ -328,10 +345,10 @@ Expected: FAIL — `renderMarkdown` is not exported yet.
 Add to the top of `src/lib/markdown/render-html.ts` (below existing imports, there are none yet — this becomes the first import):
 
 ```ts
-import { parser as baseParser, GFM } from '@lezer/markdown';
+import { parser, GFM } from '@lezer/markdown';
 import type { SyntaxNode } from '@lezer/common';
 
-const markdownParser = baseParser.configure(GFM);
+const markdownParser = parser.configure(GFM);
 ```
 
 Add below the `_assignHeadingId` function from Task 2:
@@ -458,8 +475,16 @@ describe('renderMarkdown: inline formatting and code', () => {
     expect(renderMarkdown('&amp; entity').html).toBe('<p>&amp; entity</p>');
   });
 
+  it('replaces invalid Unicode scalar values without crashing Preview', () => {
+    for (const entity of ['&#9999999;', '&#x110000;', '&#0;', '&#xD800;']) {
+      expect(renderMarkdown(entity).html).toBe('<p>\uFFFD</p>');
+    }
+    expect(renderMarkdown('&#x1F600; &#65;').html).toBe('<p>😀 A</p>');
+  });
+
   it('renders a hard line break', () => {
-    expect(renderMarkdown('line one  \nline two').html).toBe('<p>line one<br />\nline two</p>');
+    // HardBreak's source range includes the newline; render it exactly once as <br />.
+    expect(renderMarkdown('line one  \nline two').html).toBe('<p>line one<br />line two</p>');
   });
 });
 ```
@@ -524,15 +549,14 @@ const ENTITY_MAP: Record<string, string> = {
 function decodeEntity(nodeSource: string): string {
   // nodeSource is "&name;", "&#123;", or "&#x7B;".
   const body = nodeSource.slice(1, -1);
-  if (body.startsWith('#x') || body.startsWith('#X')) {
-    const code = parseInt(body.slice(2), 16);
-    return Number.isNaN(code) ? nodeSource : String.fromCodePoint(code);
-  }
   if (body.startsWith('#')) {
-    const code = parseInt(body.slice(1), 10);
-    return Number.isNaN(code) ? nodeSource : String.fromCodePoint(code);
+    const hex = /^#x/i.test(body);
+    const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+    if (!Number.isInteger(code) || code <= 0 || code > 0x10ffff ||
+        (code >= 0xd800 && code <= 0xdfff)) return '\uFFFD';
+    return String.fromCodePoint(code);
   }
-  return ENTITY_MAP[body] ?? nodeSource; // unknown named entity: leave source as-is
+  return Object.hasOwn(ENTITY_MAP, body) ? ENTITY_MAP[body] : nodeSource;
 }
 ```
 
@@ -722,11 +746,11 @@ Add `extractUrl`, `extractText`, and `extractChildText` next to `renderChildren`
     const name = node.type.name;
     if (name === 'URL') {
       const parentName = node.parent?.type.name;
-      // A Link/Image/Autolink's own URL child is hidden destination data,
+      // A Link/Image's own URL child is hidden destination data,
       // not visible text (e.g. heading "Using [Markdown](url)" extracts to
-      // "Using Markdown", not "Using Markdown url"). A standalone bare
-      // autolink URL *is* the visible text.
-      if (parentName === 'Link' || parentName === 'Image' || parentName === 'Autolink') return '';
+      // "Using Markdown", not "Using Markdown url"). An Autolink URL
+      // or standalone bare URL *is* the visible text and must be retained.
+      if (parentName === 'Link' || parentName === 'Image') return '';
       return extractUrl(node);
     }
     if (MARKER_NODES.has(name)) return '';
@@ -872,13 +896,35 @@ describe('renderMarkdown: headings and outline', () => {
     const { headings } = renderMarkdown('Setext Heading\n===');
     expect(headings).toEqual([{ level: 1, text: 'Setext Heading', id: 'setext-heading' }]);
   });
+
+  it('keeps natural suffixes and generated IDs globally unique', () => {
+    const result = renderMarkdown('# Test\n\n# Test\n\n# Test-2');
+    expect(result.headings.map((heading) => heading.id)).toEqual(['test', 'test-2', 'test-2-2']);
+    expect(result.html).toContain('id="test-2-2"');
+    expect(renderMarkdown('# Test-2\n\n# Test\n\n# Test').headings.map((h) => h.id))
+      .toEqual(['test-2', 'test', 'test-3']);
+  });
+
+  it('retains visible autolink text in outline labels', () => {
+    expect(renderMarkdown('# <https://example.com>').headings).toEqual([
+      { level: 1, text: 'https://example.com', id: 'https-example-com' },
+    ]);
+    expect(renderMarkdown('# <hello@example.com>').headings[0].text).toBe('hello@example.com');
+  });
+
+  it('preserves all heading levels and punctuation fallback after helper tests are removed', () => {
+    expect(renderMarkdown('# !!!\n\n# !!!').headings.map((h) => h.id))
+      .toEqual(['section', 'section-2']);
+    expect(renderMarkdown('# A\n## B\n### C\n#### D\n##### E\n###### F').headings.map((h) => h.level))
+      .toEqual([1, 2, 3, 4, 5, 6]);
+  });
 });
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run src/lib/markdown/render-html.test.ts`
-Expected: FAIL — heading nodes currently hit the unknown-node fallback (raw `# Hello` escaped as text), and `_assignHeadingId` is no longer exported so the old import breaks compilation.
+Expected: FAIL — heading nodes currently hit the unknown-node fallback (raw `# Hello` escaped as text). Step 1 removes the old helper import and tests; no import error is expected.
 
 - [ ] **Step 3: Write the implementation**
 
@@ -931,7 +977,7 @@ function assignHeadingId(text: string, seen: Map<string, number>): string {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run src/lib/markdown/render-html.test.ts`
-Expected: PASS — all tests in the file. Step 1 both removed Task 2's 4 `_assignHeadingId` tests (and its import) and added 5 new ones, so the total count moves by +1 relative to Task 5, not by +5.
+Expected: PASS — all tests in the file, including the public-API replacements for every slug-helper case removed in Step 1.
 
 - [ ] **Step 5: Commit**
 
@@ -969,6 +1015,12 @@ describe('renderMarkdown: blockquotes, lists, task lists, hr', () => {
   it('renders an ordered list', () => {
     const { html } = renderMarkdown('1. a\n2. b');
     expect(html).toBe('<ol><li> <p>a</p></li>\n<li> <p>b</p></li></ol>');
+  });
+
+  it('preserves non-default ordered-list start numbers, including zero', () => {
+    expect(renderMarkdown('3. third\n4. fourth').html)
+      .toBe('<ol start="3"><li> <p>third</p></li>\n<li> <p>fourth</p></li></ol>');
+    expect(renderMarkdown('0. zero').html).toBe('<ol start="0"><li> <p>zero</p></li></ol>');
   });
 
   it('renders a GFM task list with checked state', () => {
@@ -1019,8 +1071,12 @@ Add these cases to `renderNode`'s switch:
         return `<blockquote>${renderChildren(node)}</blockquote>`;
       case 'BulletList':
         return `<ul>${renderChildren(node)}</ul>`;
-      case 'OrderedList':
-        return `<ol>${renderChildren(node)}</ol>`;
+      case 'OrderedList': {
+        const marker = node.getChild('ListItem')?.getChild('ListMark');
+        const start = marker ? parseInt(source.slice(marker.from, marker.to), 10) : 1;
+        const attribute = start === 1 ? '' : ` start="${escapeAttribute(String(start))}"`;
+        return `<ol${attribute}>${renderChildren(node)}</ol>`;
+      }
       case 'ListItem':
         return `<li>${renderChildren(node)}</li>`;
       // A GFM task item's checkbox is nested one level inside its ListItem
@@ -1197,8 +1253,8 @@ Expected: PASS — all tests in the file, including the ones from Tasks 1–8. T
 
 - [ ] **Step 3: Run the full test suite once**
 
-Run: `npx vitest run src/lib/markdown/render-html.test.ts`
-Expected: all tests in the file pass, confirming the renderer module is complete before UI work begins.
+Run: `npm test`
+Expected: the renderer tests and existing suite pass before UI work begins.
 
 - [ ] **Step 4: Commit**
 
@@ -1209,7 +1265,11 @@ git commit -m "test(markdown): pin xss and raw-html security boundary"
 
 ---
 
-## Task 10: `MarkdownOutline.tsx`
+## Archived draft Tasks 10–13 (reference only — do not execute)
+
+The original UI task blocks below are retained only as historical context. They predate the approved editor-state, preview-position, decoration, and color requirements. Execute the authoritative revised Tasks 10–15 that follow the archived block instead.
+
+## Archived draft Task 10: `MarkdownOutline.tsx`
 
 No unit test — this repo has no component-level test convention (only `src/lib/**/*.ts` pure modules have `.test.ts` files; verify with `find src/components -name "*.test.*"`, expect no results). Correctness is checked manually in Task 13's browser pass.
 
@@ -1277,7 +1337,7 @@ git commit -m "feat(editor): add markdown outline sidebar component"
 
 ---
 
-## Task 11: `MarkdownPreview.tsx` and preview styles
+## Archived draft Task 11: `MarkdownPreview.tsx` and preview styles
 
 **Files:**
 - Create: `src/components/editor/MarkdownPreview.tsx`
@@ -1432,7 +1492,7 @@ git commit -m "feat(editor): add markdown preview component and styles"
 
 ---
 
-## Task 12: Wire Preview into `EditorCanvas`, retire the PLAIN/RICH toggle
+## Archived draft Task 12: Wire Preview into `EditorCanvas`, retire the PLAIN/RICH toggle
 
 This is the integration task — it removes the `<textarea>` branch and mode-switch UI, and wires `MarkdownPreview` in.
 
@@ -1837,7 +1897,7 @@ git commit -m "feat(editor): replace plain/rich toggle with edit/preview"
 
 ---
 
-## Task 13: Full verification pass
+## Archived draft Task 13: Full verification pass
 
 **Files:** none (verification only).
 
@@ -1887,3 +1947,122 @@ Using the browser's responsive/device toolbar, check phone (<768px), tablet (768
 - [ ] **Step 8: Final commit (only if Step 3–6 surfaced fixes)**
 
 If any manual check required a code fix, commit it separately with a message describing the fix (e.g. `fix(editor): ...`). If everything passed as implemented, there is nothing to commit in this step — Task 12's commit already covers the feature.
+
+---
+
+## Authoritative revised Task 10: Shared Markdown colors and preview surface styles
+
+**Files:** Modify `src/app/globals.css`, `src/components/editor/markdown-theme.ts`.
+
+**Interfaces:** CSS custom properties `--md-*` are the single color source. Keep the existing exports `markdownHighlightStyle` and `markdownEditorTheme`; do not add another styling dependency.
+
+- [ ] **Step 1: Add the approved tokens to `globals.css`.** Add `--md-canvas:#09090b`, `--md-text:#d4d4d8`, `--md-heading:#f4f4f5`, `--md-secondary:#a1a1aa`, `--md-syntax:#a1a1aa`, `--md-list-marker:#818cf8`, `--md-link:#818cf8`, `--md-code-text:#fcd34d`, `--md-code-bg:#18181b`, `--md-border:#3f3f46`, `--md-quote-border:#52525b`, `--md-selection-bg:#312e81`, `--md-selection-text:#f4f4f5`, `--md-search-bg:#854d0e`, and `--md-search-text:#fef3c7`.
+- [ ] **Step 2: Style `.md-preview`.** Use `md.text` for prose, `md.heading` plus size/weight/spacing for headings, `md.link` with underline for links, marker-only indigo via `li::marker`, amber code on continuous zinc code backgrounds, and the approved border/quote tokens. Lists must explicitly restore `list-style: disc/decimal`; code blocks need a border, 8px radius, `12px 16px` padding, and horizontal overflow. Keep `md.secondary` and `md.syntax` as separate variables even though their initial values match.
+- [ ] **Step 3: Update `markdown-theme.ts`.** Remove `tags.list` and `tags.monospace` rules. Use CSS variables for heading, links, quotes, syntax markers, canvas/text, and caret. Search marks use `md.search-bg`/`md.search-text`; native selection uses `md.selection-bg`/`md.selection-text` and takes precedence. Do not use `tags.list` to color list prose.
+- [ ] **Step 4: Verify.** Run `npm run typecheck` and `npx prettier --check src/components/editor/markdown-theme.ts src/app/globals.css`; format only these files if needed. Commit `feat(editor): share Markdown semantic colors`.
+
+## Authoritative revised Task 11: Parser-backed CodeMirror decorations
+
+**Files:** Create `src/components/editor/markdown-decorations.ts` and `src/components/editor/markdown-decorations.test.ts`; modify `src/components/editor/MarkdownEditor.tsx`.
+
+**Interfaces:** Export `markdownDecorations: Extension`. Decorations must be parser-backed and display-only: no document changes, no replacement of logical clipboard text, and no GFM parser change.
+
+- [ ] **Step 1: Add failing jsdom tests.** Mount a real `EditorView` with `markdown()`, `history()`, and the extension. Assert that list-marker spans contain only `-`/`1.`; every line of fenced and indented code, including blank lines, has a code-line decoration; inline code uses amber class; unselected single- and multi-backtick delimiters are replaced visually while literal backticks inside code remain; selecting or placing the cursor in the span reveals both delimiters; fences and unpaired backticks remain unchanged; `undo`/`redo` and `state.sliceDoc()` are unchanged; a copy event yields the original Markdown including delimiters.
+
+```ts
+// markdown-decorations.test.ts (jsdom)
+import type { Extension } from '@codemirror/state';
+function mount(doc: string, extensions: Extension[]) {
+  const view = new EditorView({ parent: document.body, state: EditorState.create({ doc, extensions }) });
+  return view;
+}
+const source = 'x ``a ` b``\n\n- prose\n\n```js\na\n\nb\n```';
+const view = mount(source, [markdown(), history(), markdownDecorations]);
+expect(view.dom.querySelectorAll('.cm-md-list-marker')[0].textContent).toBe('-');
+expect(view.dom.querySelectorAll('.cm-md-code-line')).toHaveLength(5);
+expect(view.contentDOM.textContent).toContain('x a ` b');
+view.dispatch({ selection: { anchor: 5 } });
+expect(Array.from(view.dom.querySelectorAll('.cm-md-code-mark'), n => n.textContent)).toEqual(['``', '``']);
+expect(view.state.sliceDoc()).toBe(source);
+```
+- [ ] **Step 2: Implement `markdownDecorations`.** Use a `StateField<DecorationSet>` and `ensureSyntaxTree(state, state.doc.length, 100) ?? syntaxTree(state)`. Add `Decoration.mark({class:'cm-md-list-marker'})` for `ListMark`. For `InlineCode`, mark the whole node `cm-md-inline-code`, then use `Decoration.replace({})` on each `CodeMark` unless a selection intersects the node; when revealed, mark delimiters `cm-md-code-mark`. For `FencedCode`/`CodeBlock`, add `Decoration.line` to every source line with `cm-md-code-line`, plus `cm-md-code-first`/`cm-md-code-last`; mark `CodeInfo` as `cm-md-code-info` and fence marks as `cm-md-code-mark`. Recompute on document, selection, or syntax-tree changes, and return the field through `EditorView.decorations.from`.
+- [ ] **Step 3: Integrate and verify.** Add the extension after `markdownEditorTheme` in `MarkdownEditor.tsx`. Run `npm test -- src/components/editor/markdown-decorations.test.ts` and `npm run typecheck`. Commit `feat(editor): decorate Markdown code and list markers`.
+
+## Authoritative revised Task 12: Preview scroll-position controller
+
+**Files:** Create `src/components/editor/preview-scroll.ts` and `src/components/editor/preview-scroll.test.ts`.
+
+**Interfaces:** Export `restorePreviewScroll(container: HTMLElement, requested: number, report: (scrollTop: number) => void): () => void`.
+
+- [ ] **Step 1: Test the controller.** With explicit jsdom `scrollHeight`/`clientHeight`, assert offset 0 on first visit, clamping after completed content becomes shorter, retaining the requested offset while images are pending, restoring it after `load`, reporting manual scroll and outline navigation, cancelling on wheel/touch/pointer/keyboard input, settling failed images, and ignoring late events after cleanup.
+
+```ts
+function fixture({ pendingImage }: { pendingImage: boolean }) {
+  const container = document.createElement('div');
+  const image = document.createElement('img');
+  container.append(image);
+  let height = 300;
+  Object.defineProperties(container, {
+    scrollHeight: { get: () => height }, clientHeight: { value: 100 },
+  });
+  let complete = !pendingImage;
+  Object.defineProperty(image, 'complete', { get: () => complete });
+  return { container, image, grow: (value: number) => { height = value; }, load: () => {
+    complete = true; image.dispatchEvent(new Event('load'));
+  } };
+}
+const { container, image, grow, load } = fixture({ pendingImage: true });
+const report = vi.fn();
+const dispose = restorePreviewScroll(container, 800, report);
+expect(report).not.toHaveBeenCalled();
+grow(1200); load();
+expect(container.scrollTop).toBe(800);
+expect(report).toHaveBeenLastCalledWith(800);
+dispose();
+```
+- [ ] **Step 2: Implement it.** Track pending images, apply the requested offset on mount and `ResizeObserver` changes, defer the final report until all images settle, and clean up image listeners, scroll/navigation listeners, and observer. `preview-navigation` is dispatched by outline clicks before `scrollIntoView`. User input cancels restoration so a deliberate scroll is never overwritten.
+- [ ] **Step 3: Run `npm test -- src/components/editor/preview-scroll.test.ts` and commit** `feat(editor): preserve preview reading offset through image loading`.
+
+## Authoritative revised Task 13: Outline and Preview components
+
+**Files:** Create `src/components/editor/MarkdownOutline.tsx`, `src/components/editor/MarkdownPreview.tsx`, and `src/components/editor/MarkdownPreview.test.tsx`.
+
+**Interfaces:** `MarkdownPreviewProps` is `{ content: string; initialScrollTop: number; onScrollPositionChange: (scrollTop: number) => void }`. `MarkdownOutline` receives `Heading[]` and `RefObject<HTMLDivElement | null>`.
+
+- [ ] **Step 1: Test component behavior with React/jsdom.** Verify heading-free content omits the outline, current draft changes rerender, Unicode IDs target only this preview container, and outline clicks dispatch `preview-navigation` before scoped `scrollIntoView`.
+- [ ] **Step 2: Implement `MarkdownOutline`.** Render an accessible `nav aria-label="Markdown outline"`, hide it below the existing `md` breakpoint, indent by heading level, and use `CSS.escape` with the preview container ref. Buttons need keyboard focus styling.
+- [ ] **Step 3: Implement `MarkdownPreview`.** Memoize `renderMarkdown(content)`, render the outline only when headings exist, place the HTML in one `.md-preview` article via `dangerouslySetInnerHTML`, attach a scroll-container ref, and invoke `restorePreviewScroll` whenever rendered HTML changes. Keep preview scrolling independent from CodeMirror scrolling.
+- [ ] **Step 4: Run focused component/scroll tests and `npm run typecheck`.** Confirm `dangerouslySetInnerHTML` still appears exactly once under `src/`. Commit `feat(editor): add Markdown preview and heading navigation`.
+
+## Authoritative revised Task 14: Preserve the editor session while wiring the toggle
+
+**Files:** Modify `src/components/editor/EditorCanvas.tsx`, `src/components/editor/MarkdownEditor.tsx`, `src/app/page.tsx`; create `src/components/editor/editor-scroll.ts` and `src/components/editor/editor-scroll.test.ts`; migrate `e2e/notes.spec.ts`.
+
+**Interfaces:** Extend `MarkdownEditorHandle` with `getScrollPosition(): { top: number; left: number }` and `restoreScrollPosition(position, afterMeasure?): void`. `EditorCanvas` owns `previewMode`, `previewScrollTopRef`, and separate outer/CodeMirror edit scroll snapshots.
+
+- [ ] **Step 1: Test `restoreEditorScroll`.** Use `EditorView.requestMeasure` with a controlled read/write cycle and assert both scroll axes are restored after measurement. Commit no implementation before the test fails.
+
+```ts
+const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'text' }) });
+let queued: Parameters<EditorView['requestMeasure']>[0] | undefined;
+view.requestMeasure = request => { queued = request; };
+restoreEditorScroll(view, { top: 200, left: 30 });
+const measured = queued!.read(view);
+queued!.write?.(measured, view);
+expect(view.scrollDOM.scrollTop).toBe(200);
+expect(view.scrollDOM.scrollLeft).toBe(30);
+```
+- [ ] **Step 2: Implement editor scroll access.** Add `editor-scroll.ts` using `view.requestMeasure({ read: () => position, write: saved => { view.scrollDOM.scrollTop = saved.top; view.scrollDOM.scrollLeft = saved.left; afterMeasure?.(); } })`. Expose the helper methods through `MarkdownEditorHandle`; set `viewRef.current = null` before `view.destroy()` so delayed image completion cannot dispatch into a destroyed editor.
+- [ ] **Step 3: Key the editor boundary by note ID.** Add `key={activeNote.id}` to the `EditorCanvas` element in `src/app/page.tsx`. This ensures a direct ready-note replacement gets a fresh local state and CodeMirror document. Keep the existing same-note image guard and invalidate it on editor-session cleanup.
+- [ ] **Step 4: Replace the mode toggle.** Remove the textarea branch, `NoteMode` UI checks, `textareaRef`, auto-resize effect, and `handleSwitchMode`. Keep `MarkdownEditor` mounted in a stable `hidden inert aria-hidden` wrapper while Preview is visible; show `MarkdownPreview` alongside it. Capture outer and CodeMirror scroll positions before entering Preview, restore them after returning through `useLayoutEffect`, reset preview offset and `previewMode` on note ID changes, and never cancel pending autosave on a view toggle. Use Eye/Pencil controls with `aria-pressed`; footer displays `EDIT`/`PREVIEW`; toolbar renders only in Edit.
+- [ ] **Step 5: Migrate and extend browser tests.** Update existing `e2e/notes.spec.ts` scenarios from PLAIN/RICH and textarea selectors to CodeMirror/Edit/Preview. Add assertions for latest unsaved content in Preview, retained selection/undo/redo/editor scroll after round-trip, first preview at top and later preview offset restoration, outline navigation, shorter-content clamping, note-switch/reset behavior, image paste completion while previewing, hidden editor keyboard isolation, and responsive outline visibility. Do not claim this passes until run against a live disposable test database.
+- [ ] **Step 6: Run `npm test -- src/components/editor`, `npm run typecheck`, and `npm run lint`; commit** `feat(editor): retain writing session across Markdown preview`.
+
+## Authoritative revised Task 15: Whole-branch verification and visual acceptance
+
+**Files:** none unless verification exposes a required fix; any fix gets its own commit.
+
+- [ ] **Step 1: Run automated checks.** Run `npm run typecheck && npm run lint && npm test`; run `npm run test:e2e` only with the disposable database and `APP_PASSWORD` described in `e2e/README.md`. Confirm `rg -n "dangerouslySetInnerHTML" src` returns exactly the Preview boundary, and `rg -n "NoteMode|textareaRef|handleSwitchMode" src/components/editor/EditorCanvas.tsx` returns no matches.
+- [ ] **Step 2: Run browser visual checks through the existing browser workflow.** At mobile (<768px), tablet (768–1023px), and desktop (≥1024px), verify Edit/Preview controls, hidden toolbar, responsive outline, no horizontal overflow, marker-only list color, amber inline/block code, continuous code-block backgrounds, links containing code, and selection/search contrast. Check a 30-line code block before deciding whether the shared amber token needs adjustment.
+- [ ] **Step 3: Verify state behavior manually.** Confirm first Preview starts at top; subsequent visits restore preview offset; outline navigation updates it; image loading does not erase it; shorter content clamps it; editing position/selection/undo history remains independent; switching notes and reloading reset both view state and preview offset. Confirm content, exports, clipboard, and saved `Note.mode` remain unchanged.
+- [ ] **Step 4: Commit only surfaced fixes and update the progress ledger.** Record each clean task as required by Subagent-Driven Development, then dispatch the final whole-branch review with the merge-base review package.

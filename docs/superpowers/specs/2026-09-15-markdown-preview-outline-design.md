@@ -27,6 +27,7 @@ After:               ┌─ Edit:    CodeMirror
 - No `Note.mode` database migration. The column, `NoteMode` enum, `NotePayload.mode`, and API validation all stay exactly as they are.
 - No new UI-selectable view-state persistence. Edit vs. Preview is ephemeral, per-session, per-note-open UI state.
 - No editor-state persistence across a page reload or switching away from the current note. State preservation below applies to Edit/Preview round-trips within the currently open note.
+- Reference-style link destination lookup is outside this renderer's scope. Reference definitions render as nothing; a reference usage without an inline URL preserves its visible label without emitting a dead anchor. Bare GFM URLs remain visible text.
 
 ## Preserve the writing session across Preview
 
@@ -36,7 +37,7 @@ Keep the current note's `MarkdownEditor` and its `EditorView` mounted while Prev
 
 This approach keeps CodeMirror's existing state together. Destroying and reconstructing the editor from an explicit state snapshot is an alternative, but adds lifecycle and scroll-restoration work without a product benefit here. Retaining a mounted editor uses memory while previewing; only the current note's editor is retained, not a cache of editors for previously opened notes.
 
-Switching notes still starts in Edit with a fresh editor for the selected note. The toggle does not convert content, change `Note.mode`, or cancel pending autosave. A pending image paste for the same note can complete against the retained editor and update Preview; the existing note-identity guard must still prevent insertion into a different note.
+Switching notes still starts in Edit with a fresh editor for the selected note. Key the editor-session boundary by the note ID so a new CodeMirror instance cannot initialize from the previous note's local content before an effect synchronizes it. The toggle does not convert content, change `Note.mode`, or cancel pending autosave. A pending image paste for the same note can complete against the retained editor and update Preview; the existing note-identity guard must still prevent insertion into a different note, including completion after the old editor session unmounts.
 
 ### Preview reading position
 
@@ -134,7 +135,7 @@ containerRef.current
   ?.scrollIntoView({ block: 'start' });
 ```
 
-`CSS.escape` guards against selector-syntax edge cases in generated ids even though the slugger (below) only ever emits `[a-z0-9-]`, so this is a no-cost safety net rather than a load-bearing assumption.
+`CSS.escape` handles selector-syntax edge cases in generated IDs, including Unicode characters and IDs that begin with a digit. Scope the query to this note's preview container.
 
 ## Rendering pipeline (`src/lib/markdown/render-html.ts`, new)
 
@@ -175,9 +176,10 @@ The rest of the contract:
 
 - **Semantic nodes get an explicit renderer** using the gap-aware `renderChildren` above: `Document` (transparent — render its children/gaps directly, no wrapper element), `Paragraph`, `ATXHeading1`–`ATXHeading6`, `SetextHeading1`/`SetextHeading2`, `Blockquote`, `BulletList`, `OrderedList`, `ListItem`, `Task`, `FencedCode`, `CodeBlock`, `Table`, `TableHeader`, `TableRow`, `TableCell`, `HorizontalRule`, `Emphasis`, `StrongEmphasis`, `Strikethrough`, `InlineCode`, `Link`, `Image`, `Autolink`, `LinkReference`, `HardBreak`, `Escape`, `Entity`. (`Task` is the actual emitted node for a GFM task-list item — `TaskList` is only the name of the parser *extension* object in `@lezer/markdown`'s exports, not a node type that appears in the tree; task items live inside an ordinary `BulletList`.)
 - **Syntax marker nodes always render as `''`** (never their source, never a gap-eligible child): `HeaderMark`, `EmphasisMark`, `StrikethroughMark`, `CodeMark`, `CodeInfo`, `LinkMark`, `LinkLabel`, `LinkTitle`, `ListMark`, `QuoteMark`, `TableDelimiter`, `TaskMarker` (its only use is reading checked/unchecked state before returning `''`).
-- **`URL` nodes are consumed as data, not content** — inside `Link`/`Image`/`Autolink`, the `URL` child's source text becomes the `href`/`src` value (after the scheme check below); when rendering that node's own children via `renderChildren`, treat `URL` like a marker (contributes `''`, not visible text).
+- **`URL` rendering depends on the parent** — inside `Link`/`Image`/`Autolink`, the parent's specialized renderer consumes the destination; the child contributes no duplicate HTML. A standalone GFM URL remains escaped visible text. For semantic text extraction, an `Autolink` URL is its visible label and must be kept; only destination data inside `Link`/`Image` is excluded.
 - **`Escape` and `Entity` need semantic decoding, not a source slice**: `\*` must render as `*`, `&amp;` must render as `&` — render their *decoded* character(s), escaped for HTML, not their literal source text (which would print the backslash or re-emit the raw entity spelling).
 - **`HTMLBlock` and `HTMLTag`** are always rendered as escaped plain text of their own source range — raw HTML from note content is never passed through, regardless of how well-formed it looks.
+- Numeric entities must not crash Preview: replace zero, surrogate values and out-of-range values with U+FFFD rather than passing them to `String.fromCodePoint`. The renderer uses a curated named-entity map; unknown names remain escaped literal source.
 - **Any other/unknown node type** falls back to `escapeHtml(source.slice(node.from, node.to))` — escaped plain text of its full range. This is the fail-closed default: an unhandled node degrades to visible text, never to unescaped output. (This must never be `tree.topNode`'s own fallback — `Document` is explicitly handled above specifically so the whole document doesn't hit this branch.)
 
 ### `extractText(node)`: semantic text, not source slice
@@ -209,6 +211,10 @@ text
 
 `架构设计` → `架构设计`, `Hello 世界` → `hello-世界`. If a heading has no letters or numbers at all (e.g. `# !!!`), the result is empty — fall back to the literal string `section` in that case, before dedup. Collisions within one document (including the empty-heading fallback) get a numeric suffix: `test`, `test-2`, `test-3` / `架构设计`, `架构设计-2` / `section`, `section-2`. The same `id` is written as the `id` attribute on the corresponding `<h1>`–`<h6>` in the rendered HTML, so outline clicks and in-page anchors share the identical id space.
 
+Reserve every emitted heading ID, including generated suffixes. For `# Test`, `# Test`, `# Test-2`, IDs must be `test`, `test-2`, `test-2-2`; for `# Test-2`, `# Test`, `# Test`, IDs must be `test-2`, `test`, `test-3`. Distinct outline entries must never share an anchor.
+
+Ordered lists preserve the first source item's number with an HTML `start` attribute when it differs from 1, including a start of 0.
+
 `renderMarkdown(content)` returns `{ html, headings }` from one parse + one traversal — `MarkdownPreview` is the only caller.
 
 ### Security boundary
@@ -217,8 +223,8 @@ There is no HTML sanitizer anywhere in this codebase (by design — pasted HTML 
 
 | Content class | Rule |
 |---|---|
-| Text content (paragraph/emphasis/heading text, etc.) | `escapeHtml()` — `&<>"'` entity-escaped |
-| HTML attribute values | `escapeAttribute()` — same entity set, applied wherever a value is interpolated into `attr="..."` |
+| Text content (paragraph/emphasis/heading text, etc.) | `escapeHtml()` — `&<>` entity-escaped; quotes are safe in text content |
+| HTML attribute values | `escapeAttribute()` — additionally escape both quote characters, applied wherever a value is interpolated into `attr="..."` |
 | `<a href>` | Scheme allowlist: `http:`, `https:`, `mailto:`, or scheme-less (relative path / `#fragment`). Anything else (`javascript:`, `vbscript:`, `data:`, unknown schemes) → **do not emit an `<a>` tag at all**; render the link's inner text as plain escaped text instead. |
 | `<img src>` | Scheme allowlist: `http:`, `https:`, `data:image/png`, `data:image/jpeg`, `data:image/webp`, `data:image/gif`. Anything else → **do not emit an `<img>` tag**; render the alt text as plain escaped text instead. |
 | `HTMLBlock` / `HTMLTag` | Always escaped source text, never interpreted as markup. |
@@ -270,5 +276,7 @@ Browser acceptance checks for the writing session:
 7. `package.json` — promote `@lezer/markdown` from transitive to direct dependency (pinned `1.7.2`, matching the already-resolved lockfile version).
 8. `src/components/editor/MarkdownEditor.tsx` — integrate display-only inline-code decorations and any visibility/measurement handling needed to preserve editor state.
 9. `src/components/editor/markdown-theme.ts` — adopt the shared semantic colors, marker-only list coloring, code containers, and selection/search precedence.
+10. `src/app/page.tsx` — key the `EditorCanvas` session by note ID so note changes reset local state before creating the editor.
+11. `e2e/notes.spec.ts` — migrate existing textarea/mode-switch scenarios to the single Markdown editor and Edit/Preview flow; add focused browser coverage for the new behaviors.
 
 The revised implementation plan must also locate the shared token source and focused decoration tests before dispatching tasks.
