@@ -48,7 +48,7 @@ function slugifyText(text: string): string {
   return slug || 'section';
 }
 
-export function _assignHeadingId(text: string, seen: Map<string, number>): string {
+function assignHeadingId(text: string, seen: Map<string, number>): string {
   const base = slugifyText(text);
   let count = seen.get(base) ?? 0;
   let id = count === 0 ? base : `${base}-${count + 1}`;
@@ -189,6 +189,19 @@ export function renderMarkdown(content: string): RenderResult {
     return extractText(node);
   }
 
+  const seenSlugs = new Map<string, number>();
+
+  function renderHeading(node: SyntaxNode, level: Heading['level']): string {
+    // .trim() drops the syntactic space/newline adjacent to the heading
+    // marker (e.g. the leading space after "#", or the trailing newline
+    // before a setext "===" line) that the gap-based extraction otherwise
+    // includes — it's a delimiter, not part of the visible heading text.
+    const text = extractText(node).trim();
+    const id = assignHeadingId(text, seenSlugs);
+    headings.push({ level, text, id });
+    return `<h${level} id="${escapeAttribute(id)}">${renderChildren(node)}</h${level}>`;
+  }
+
   function renderLink(node: SyntaxNode): string {
     const urlNode = node.getChild('URL');
     const inner = renderChildren(node);
@@ -225,6 +238,22 @@ export function renderMarkdown(content: string): RenderResult {
         return renderChildren(node);
       case 'Paragraph':
         return `<p>${renderChildren(node)}</p>`;
+      case 'ATXHeading1':
+        return renderHeading(node, 1);
+      case 'ATXHeading2':
+        return renderHeading(node, 2);
+      case 'ATXHeading3':
+        return renderHeading(node, 3);
+      case 'ATXHeading4':
+        return renderHeading(node, 4);
+      case 'ATXHeading5':
+        return renderHeading(node, 5);
+      case 'ATXHeading6':
+        return renderHeading(node, 6);
+      case 'SetextHeading1':
+        return renderHeading(node, 1);
+      case 'SetextHeading2':
+        return renderHeading(node, 2);
       case 'Emphasis':
         return `<em>${renderChildren(node)}</em>`;
       case 'StrongEmphasis':

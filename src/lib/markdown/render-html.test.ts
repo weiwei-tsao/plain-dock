@@ -4,7 +4,6 @@ import {
   escapeAttribute,
   isSafeLinkHref,
   isSafeImageSrc,
-  _assignHeadingId,
   renderMarkdown,
 } from './render-html';
 
@@ -79,40 +78,69 @@ describe('isSafeImageSrc', () => {
   });
 });
 
-describe('_assignHeadingId', () => {
-  it('slugifies ASCII text', () => {
-    const seen = new Map<string, number>();
-    expect(_assignHeadingId('Hello World', seen)).toBe('hello-world');
+describe('renderMarkdown: headings and outline', () => {
+  it('renders an ATX heading with a slug id and collects it into headings', () => {
+    const { html, headings } = renderMarkdown('# Hello');
+    expect(html).toContain('<h1 id="hello">');
+    expect(headings).toEqual([{ level: 1, text: 'Hello', id: 'hello' }]);
   });
 
-  it('preserves non-Latin letters instead of stripping them', () => {
-    const seen = new Map<string, number>();
-    expect(_assignHeadingId('架构设计', seen)).toBe('架构设计');
-    expect(_assignHeadingId('Hello 世界', seen)).toBe('hello-世界');
+  it('extracts semantic (formatting-stripped) text for the outline, not raw source', () => {
+    const { headings } = renderMarkdown(
+      '## Using **CodeMirror** with [Markdown](https://example.com)',
+    );
+    expect(headings).toEqual([
+      { level: 2, text: 'Using CodeMirror with Markdown', id: 'using-codemirror-with-markdown' },
+    ]);
   });
 
-  it('dedupes repeated slugs with -2, -3 suffixes', () => {
-    const seen = new Map<string, number>();
-    expect(_assignHeadingId('Test', seen)).toBe('test');
-    expect(_assignHeadingId('Test', seen)).toBe('test-2');
-    expect(_assignHeadingId('Test', seen)).toBe('test-3');
+  it('dedupes identical headings with -2/-3 suffixes, across formatting differences', () => {
+    const { headings } = renderMarkdown('# Hello **world**\n\n# Hello world');
+    expect(headings).toEqual([
+      { level: 1, text: 'Hello world', id: 'hello-world' },
+      { level: 1, text: 'Hello world', id: 'hello-world-2' },
+    ]);
   });
 
-  it('also reserves generated IDs against naturally suffixed headings', () => {
-    const seen = new Map<string, number>();
-    expect(_assignHeadingId('Test', seen)).toBe('test');
-    expect(_assignHeadingId('Test', seen)).toBe('test-2');
-    expect(_assignHeadingId('Test-2', seen)).toBe('test-2-2');
-    const reversed = new Map<string, number>();
-    expect(_assignHeadingId('Test-2', reversed)).toBe('test-2');
-    expect(_assignHeadingId('Test', reversed)).toBe('test');
-    expect(_assignHeadingId('Test', reversed)).toBe('test-3');
+  it('preserves non-Latin heading text and slugs end to end', () => {
+    const { headings } = renderMarkdown('# 架构设计\n\n# 架构设计');
+    expect(headings).toEqual([
+      { level: 1, text: '架构设计', id: '架构设计' },
+      { level: 1, text: '架构设计', id: '架构设计-2' },
+    ]);
   });
 
-  it('falls back to "section" when the heading has no letters or numbers', () => {
-    const seen = new Map<string, number>();
-    expect(_assignHeadingId('!!!', seen)).toBe('section');
-    expect(_assignHeadingId('!!!', seen)).toBe('section-2');
+  it('renders a setext (underline-style) heading', () => {
+    const { headings } = renderMarkdown('Setext Heading\n===');
+    expect(headings).toEqual([{ level: 1, text: 'Setext Heading', id: 'setext-heading' }]);
+  });
+
+  it('keeps natural suffixes and generated IDs globally unique', () => {
+    const result = renderMarkdown('# Test\n\n# Test\n\n# Test-2');
+    expect(result.headings.map((heading) => heading.id)).toEqual(['test', 'test-2', 'test-2-2']);
+    expect(result.html).toContain('id="test-2-2"');
+    expect(renderMarkdown('# Test-2\n\n# Test\n\n# Test').headings.map((h) => h.id)).toEqual([
+      'test-2',
+      'test',
+      'test-3',
+    ]);
+  });
+
+  it('retains visible autolink text in outline labels', () => {
+    expect(renderMarkdown('# <https://example.com>').headings).toEqual([
+      { level: 1, text: 'https://example.com', id: 'https-example-com' },
+    ]);
+    expect(renderMarkdown('# <hello@example.com>').headings[0].text).toBe('hello@example.com');
+  });
+
+  it('preserves all heading levels and punctuation fallback after helper tests are removed', () => {
+    expect(renderMarkdown('# !!!\n\n# !!!').headings.map((h) => h.id)).toEqual([
+      'section',
+      'section-2',
+    ]);
+    expect(
+      renderMarkdown('# A\n## B\n### C\n#### D\n##### E\n###### F').headings.map((h) => h.level),
+    ).toEqual([1, 2, 3, 4, 5, 6]);
   });
 });
 
