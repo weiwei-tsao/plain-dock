@@ -7,6 +7,7 @@ export function escapeAttribute(text: string): string {
 }
 
 function hasControlChars(url: string): boolean {
+  // eslint-disable-next-line no-control-regex -- URL validation must reject ASCII control codes.
   return /[\u0000-\u001F\u007F]/.test(url);
 }
 
@@ -32,4 +33,25 @@ export function isSafeImageSrc(url: string): boolean {
   if (scheme === null) return true;
   if (scheme === 'data') return IMAGE_DATA_MIME_RE.test(url.trim());
   return IMAGE_URL_SCHEMES.has(scheme);
+}
+
+function slugifyText(text: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'section';
+}
+
+export function _assignHeadingId(text: string, seen: Map<string, number>): string {
+  const base = slugifyText(text);
+  let count = seen.get(base) ?? 0;
+  let id = count === 0 ? base : `${base}-${count + 1}`;
+  while (seen.has(id)) {
+    count += 1;
+    id = `${base}-${count + 1}`;
+  }
+  seen.set(base, count + 1);
+  seen.set(id, 1);
+  return id;
 }

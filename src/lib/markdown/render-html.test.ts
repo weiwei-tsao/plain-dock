@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, escapeAttribute, isSafeLinkHref, isSafeImageSrc } from './render-html';
+import {
+  escapeHtml,
+  escapeAttribute,
+  isSafeLinkHref,
+  isSafeImageSrc,
+  _assignHeadingId,
+} from './render-html';
 
 describe('escapeHtml', () => {
   it('escapes &, <, >', () => {
@@ -49,5 +55,42 @@ describe('isSafeImageSrc', () => {
 
   it('rejects a MIME type that merely starts with an allowed one (boundary check, not prefix check)', () => {
     expect(isSafeImageSrc('data:image/pngevil,AAAA')).toBe(false);
+  });
+});
+
+describe('_assignHeadingId', () => {
+  it('slugifies ASCII text', () => {
+    const seen = new Map<string, number>();
+    expect(_assignHeadingId('Hello World', seen)).toBe('hello-world');
+  });
+
+  it('preserves non-Latin letters instead of stripping them', () => {
+    const seen = new Map<string, number>();
+    expect(_assignHeadingId('架构设计', seen)).toBe('架构设计');
+    expect(_assignHeadingId('Hello 世界', seen)).toBe('hello-世界');
+  });
+
+  it('dedupes repeated slugs with -2, -3 suffixes', () => {
+    const seen = new Map<string, number>();
+    expect(_assignHeadingId('Test', seen)).toBe('test');
+    expect(_assignHeadingId('Test', seen)).toBe('test-2');
+    expect(_assignHeadingId('Test', seen)).toBe('test-3');
+  });
+
+  it('also reserves generated IDs against naturally suffixed headings', () => {
+    const seen = new Map<string, number>();
+    expect(_assignHeadingId('Test', seen)).toBe('test');
+    expect(_assignHeadingId('Test', seen)).toBe('test-2');
+    expect(_assignHeadingId('Test-2', seen)).toBe('test-2-2');
+    const reversed = new Map<string, number>();
+    expect(_assignHeadingId('Test-2', reversed)).toBe('test-2');
+    expect(_assignHeadingId('Test', reversed)).toBe('test');
+    expect(_assignHeadingId('Test', reversed)).toBe('test-3');
+  });
+
+  it('falls back to "section" when the heading has no letters or numbers', () => {
+    const seen = new Map<string, number>();
+    expect(_assignHeadingId('!!!', seen)).toBe('section');
+    expect(_assignHeadingId('!!!', seen)).toBe('section-2');
   });
 });
