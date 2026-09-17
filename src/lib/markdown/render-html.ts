@@ -78,6 +78,9 @@ const MARKER_NODES = new Set<string>([
   'StrikethroughMark',
   'CodeMark',
   'CodeInfo',
+  'LinkMark',
+  'LinkLabel',
+  'LinkTitle',
 ]);
 
 function decodeEscape(nodeSource: string): string {
@@ -152,6 +155,67 @@ export function renderMarkdown(content: string): RenderResult {
     return out;
   }
 
+  function extractUrl(urlNode: SyntaxNode): string {
+    const raw = source.slice(urlNode.from, urlNode.to);
+    if (raw.startsWith('<') && raw.endsWith('>')) return raw.slice(1, -1);
+    return raw;
+  }
+
+  function extractText(node: SyntaxNode): string {
+    let out = '';
+    let pos = node.from;
+    let child = node.firstChild;
+    while (child) {
+      out += source.slice(pos, child.from);
+      out += extractChildText(child);
+      pos = child.to;
+      child = child.nextSibling;
+    }
+    out += source.slice(pos, node.to);
+    return out;
+  }
+
+  function extractChildText(node: SyntaxNode): string {
+    const name = node.type.name;
+    if (name === 'URL') {
+      const parentName = node.parent?.type.name;
+      if (parentName === 'Link' || parentName === 'Image') return '';
+      return extractUrl(node);
+    }
+    if (MARKER_NODES.has(name)) return '';
+    if (name === 'Escape') return decodeEscape(source.slice(node.from, node.to));
+    if (name === 'Entity') return decodeEntity(source.slice(node.from, node.to));
+    if (name === 'HTMLBlock' || name === 'HTMLTag') return source.slice(node.from, node.to);
+    return extractText(node);
+  }
+
+  function renderLink(node: SyntaxNode): string {
+    const urlNode = node.getChild('URL');
+    const inner = renderChildren(node);
+    if (!urlNode) return inner;
+    const url = extractUrl(urlNode);
+    if (!isSafeLinkHref(url)) return inner;
+    return `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
+  }
+
+  function renderImage(node: SyntaxNode): string {
+    const urlNode = node.getChild('URL');
+    const alt = extractText(node);
+    if (!urlNode) return escapeHtml(alt);
+    const url = extractUrl(urlNode);
+    if (!isSafeImageSrc(url)) return escapeHtml(alt);
+    return `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}" />`;
+  }
+
+  function renderAutolink(node: SyntaxNode): string {
+    const urlNode = node.getChild('URL');
+    if (!urlNode) return escapeHtml(source.slice(node.from, node.to));
+    const rawUrl = extractUrl(urlNode);
+    const url = getScheme(rawUrl) === null ? `mailto:${rawUrl}` : rawUrl;
+    if (!isSafeLinkHref(url)) return escapeHtml(rawUrl);
+    return `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(rawUrl)}</a>`;
+  }
+
   function renderNode(node: SyntaxNode): string {
     const name = node.type.name;
     if (MARKER_NODES.has(name)) return '';
@@ -180,6 +244,19 @@ export function renderMarkdown(content: string): RenderResult {
         return `<pre><code>${renderChildren(node)}</code></pre>`;
       case 'CodeText':
         return escapeHtml(source.slice(node.from, node.to));
+      case 'Link':
+        return renderLink(node);
+      case 'Image':
+        return renderImage(node);
+      case 'Autolink':
+        return renderAutolink(node);
+      case 'LinkReference':
+        return '';
+      case 'URL': {
+        const parentName = node.parent?.type.name;
+        if (parentName === 'Link' || parentName === 'Image' || parentName === 'Autolink') return '';
+        return escapeHtml(source.slice(node.from, node.to));
+      }
       default:
         return escapeHtml(source.slice(node.from, node.to));
     }

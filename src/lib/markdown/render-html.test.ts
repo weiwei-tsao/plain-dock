@@ -152,3 +152,67 @@ describe('renderMarkdown: inline formatting and code', () => {
     expect(renderMarkdown('line one  \nline two').html).toBe('<p>line one<br />line two</p>');
   });
 });
+
+describe('renderMarkdown: links and images', () => {
+  it('renders a safe link with target=_blank and rel=noopener', () => {
+    const { html } = renderMarkdown('[click](https://example.com)');
+    expect(html).toBe(
+      '<p><a href="https://example.com" target="_blank" rel="noopener noreferrer">click</a></p>',
+    );
+  });
+
+  it('degrades a javascript: link to plain text — no <a> tag, no href leaks', () => {
+    const { html } = renderMarkdown('[click](javascript:alert(1))');
+    expect(html).toBe('<p>click</p>');
+    expect(html).not.toMatch(/href\s*=\s*["']javascript:/i);
+  });
+
+  it('strips angle brackets from a bracketed destination before using it as the href', () => {
+    const { html } = renderMarkdown('[x](<https://example.com/a b>)');
+    expect(html).toBe(
+      '<p><a href="https://example.com/a b" target="_blank" rel="noopener noreferrer">x</a></p>',
+    );
+  });
+
+  it('rejects a bracketed destination smuggling a control character past the scheme regex', () => {
+    const { html } = renderMarkdown('[x](<java\tscript:alert(1)>)');
+    expect(html).toBe('<p>x</p>');
+    expect(html).not.toMatch(/href\s*=\s*["']java/i);
+  });
+
+  it('renders a pasted data:image/webp image (the paste-image contract)', () => {
+    const { html } = renderMarkdown('![paste](data:image/webp;base64,AAAA)');
+    expect(html).toBe('<p><img src="data:image/webp;base64,AAAA" alt="paste" /></p>');
+  });
+
+  it('degrades a non-allowlisted image src to its alt text, no <img> tag', () => {
+    const { html } = renderMarkdown('![bad](javascript:alert(1))');
+    expect(html).toBe('<p>bad</p>');
+    expect(html).not.toContain('<img');
+  });
+
+  it('renders a <url> autolink', () => {
+    const { html } = renderMarkdown('auto <https://example.com> link');
+    expect(html).toBe(
+      '<p>auto <a href="https://example.com" target="_blank" rel="noopener noreferrer">https://example.com</a> link</p>',
+    );
+  });
+
+  it('renders a <email> autolink with an implicit mailto: scheme', () => {
+    const { html } = renderMarkdown('<hello@example.com>');
+    expect(html).toBe(
+      '<p><a href="mailto:hello@example.com" target="_blank" rel="noopener noreferrer">hello@example.com</a></p>',
+    );
+  });
+
+  it('renders a reference-style link definition as nothing, and an unresolved usage as plain text', () => {
+    const { html } = renderMarkdown('[ref link][label]\n\n[label]: https://example.com "title"');
+    expect(html).toBe('<p>ref link</p>\n\n');
+    expect(html).not.toContain('<a');
+  });
+
+  it('does not silently drop a bare, unbracketed GFM autolink', () => {
+    const { html } = renderMarkdown('visit www.example.com today');
+    expect(html).toBe('<p>visit www.example.com today</p>');
+  });
+});
