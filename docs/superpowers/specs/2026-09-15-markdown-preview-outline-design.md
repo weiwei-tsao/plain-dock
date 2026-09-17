@@ -46,6 +46,12 @@ The reading position lives only in memory for the currently open note. Switching
 
 `EditorCanvas` retains the preview scroll offset across `MarkdownPreview` mounts and resets it on note changes. `MarkdownPreview` reports scroll changes and restores the supplied offset after rendering and layout; image loading must not cause a premature clamp to discard a restorable position. Preview remains responsible for its own DOM and scrolling, while `EditorCanvas` holds the per-note-open value.
 
+## Inline code editing and color follow-up
+
+**Confirmed 2026-09-16:** In Edit, show inline-code backtick delimiters when the cursor is inside the code span or a selection intersects it; hide them otherwise. This is a display-only change: stored Markdown, clipboard source text, exports, and undo history retain the delimiters. Reveal both delimiters so the user can edit the complete syntax. Recognize actual parsed inline-code spans, including multi-backtick delimiters; do not hide literal backticks inside code content or extend this behavior to fenced-code blocks. Preview renders inline code without its Markdown delimiters.
+
+The user also requested a shared editor/preview color specification to distinguish code from lists. The [color guidelines proposal](2026-09-16-markdown-color-guidelines.md) contains exact tokens, contrast calculations, and acceptance cases. Its amber code palette is **proposed, not yet approved**; the existing palette remains the baseline until that choice is confirmed. The implementation scope now includes editor decorations as well as the preview work; revise the plan before execution.
+
 ## `Note.mode`: frozen, not removed
 
 `EditorCanvas`'s `triggerSave()` already does `const mode = updates.mode ?? note.mode;` — it never needs a caller to supply `mode` explicitly. Removing `handleSwitchMode()` and its two toggle buttons is sufficient to freeze the field: every save simply carries the note's existing `mode` forward unchanged. No changes needed to `schema.prisma`, `types.ts`, API routes, or `serialize.ts`. `NoteMode` stays defined; a future migration (if ever needed) is a separate, independently-scoped change.

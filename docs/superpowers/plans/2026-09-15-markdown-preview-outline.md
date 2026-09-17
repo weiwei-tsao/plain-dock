@@ -8,6 +8,8 @@
 
 **Goal:** Replace the PLAIN/RICH editor toggle with a single Markdown editor plus a Preview view that renders the note's Markdown as HTML with a heading-based outline on the left.
 
+> **Editor readability follow-up — 2026-09-16.** The user approved showing inline-code delimiters while the cursor/selection is in the code span and hiding them otherwise, without changing Markdown content or undo history. Add a focused editor-decoration task and interaction verification before dispatching this plan. A shared color specification is drafted in `docs/superpowers/specs/2026-09-16-markdown-color-guidelines.md`; its palette is pending approval. If adopted, revise the palette constraint and Tasks 10–12 plus the editor theme to use the shared tokens instead of the old literal colors.
+
 **Architecture:** A new pure module (`src/lib/markdown/render-html.ts`) parses Markdown with `@lezer/markdown` (GFM-configured) and walks the resulting syntax tree once to produce both an HTML string and a heading list, escaping all text/attributes and allowlisting link/image URL schemes as it goes. `EditorCanvas` drops its PLAIN `<textarea>` branch entirely and gains a local, ephemeral `previewMode` flag. The current note's CodeMirror editor stays mounted but hidden during Preview; a new `MarkdownPreview` component owns rendering and wraps a new `MarkdownOutline` component (click-to-scroll heading list).
 
 **Tech Stack:** Next.js/React/TypeScript, `@lezer/markdown` + `@lezer/common` (promoted from transitive to direct dependencies, versions already resolved in the lockfile), Vitest.
