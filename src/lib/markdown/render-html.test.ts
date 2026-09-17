@@ -323,20 +323,19 @@ describe('renderMarkdown: security boundary', () => {
     expect(renderMarkdown('&unknown;').html).toBe('<p>&amp;unknown;</p>');
   });
 
-  it('never lets a javascript: URL reach an href or src attribute, in any position', () => {
-    // Checking for the bare substring "javascript:" would be too strong a
-    // claim: 'auto <javascript:alert(1)> link' safely degrades to
-    // '<p>auto javascript:alert(1) link</p>' — the text is visible and
-    // harmless, it's just not inside an attribute. What must never happen
-    // is that substring appearing as the value of an href or src.
+  it('rejects javascript: URLs with visible fallback text in any position', () => {
     const cases = [
-      '[click](javascript:alert(1))',
-      '![img](javascript:alert(1))',
-      'auto <javascript:alert(1)> link',
+      { md: '[click](javascript:alert(1))', expected: '<p>click</p>' },
+      { md: '![img](javascript:alert(1))', expected: '<p>img</p>' },
+      {
+        md: 'auto <javascript:alert(1)> link',
+        expected: '<p>auto javascript:alert(1) link</p>',
+      },
     ];
-    for (const md of cases) {
+    for (const { md, expected } of cases) {
       const { html } = renderMarkdown(md);
-      expect(html).not.toMatch(/(?:href|src)\s*=\s*["']javascript:/i);
+      expect(html).not.toMatch(/(?:href|src)\s*=/i);
+      expect(html).toBe(expected);
     }
   });
 
@@ -348,6 +347,7 @@ describe('renderMarkdown: security boundary', () => {
     // control-character rejection and Task 5's bracket-stripping have to
     // compose correctly to close — see both tasks' comments.
     const { html } = renderMarkdown('[x](<java\tscript:alert(1)>)');
-    expect(html).not.toMatch(/href\s*=\s*["']java/i);
+    expect(html).not.toMatch(/(?:href|src)\s*=/i);
+    expect(html).toBe('<p>x</p>');
   });
 });
