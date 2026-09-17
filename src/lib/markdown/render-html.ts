@@ -84,6 +84,7 @@ const MARKER_NODES = new Set<string>([
   'ListMark',
   'QuoteMark',
   'TaskMarker',
+  'TableDelimiter',
 ]);
 
 function decodeEscape(nodeSource: string): string {
@@ -243,6 +244,18 @@ export function renderMarkdown(content: string): RenderResult {
         return `<p>${renderChildren(node)}</p>`;
       case 'Blockquote':
         return `<blockquote>${renderChildren(node)}</blockquote>`;
+      case 'Table':
+        return `<table>${renderChildren(node)}</table>`;
+      case 'TableHeader':
+        return `<tr>${renderChildren(node)}</tr>`;
+      case 'TableRow':
+        return `<tr>${renderChildren(node)}</tr>`;
+      // A TableCell's node type does not indicate whether it is a header or
+      // body cell, so use its parent to choose the semantic tag.
+      case 'TableCell': {
+        const tag = node.parent?.type.name === 'TableHeader' ? 'th' : 'td';
+        return `<${tag}>${renderChildren(node)}</${tag}>`;
+      }
       case 'BulletList':
         return `<ul>${renderChildren(node)}</ul>`;
       case 'OrderedList': {

@@ -280,3 +280,19 @@ describe('renderMarkdown: blockquotes, lists, task lists, hr', () => {
     expect(renderMarkdown('---').html).toBe('<hr />');
   });
 });
+
+describe('renderMarkdown: GFM tables (terminal-table.ts paste contract)', () => {
+  it('renders the exact table shape terminal-table.ts produces', () => {
+    const { html } = renderMarkdown('| a | b |\n| --- | --- |\n| 1 | 2 |');
+    expect(html).toBe(
+      '<table><tr> <th>a</th>  <th>b</th> </tr>\n\n<tr> <td>1</td>  <td>2</td> </tr></table>',
+    );
+  });
+
+  it('preserves escaped pipes and escapes cell HTML', () => {
+    const { html } = renderMarkdown('| a | b |\n| --- | --- |\n| x \\| y | <z> |');
+    expect(html).toBe(
+      '<table><tr> <th>a</th>  <th>b</th> </tr>\n\n<tr> <td>x | y</td>  <td>&lt;z&gt;</td> </tr></table>',
+    );
+  });
+});
