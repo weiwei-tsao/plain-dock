@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Requirements revision — 2026-09-16; design decisions confirmed, task-level revision required before execution.** The user confirmed a writing-first workflow and preservation of undo/redo history, cursor/selection, and editing scroll position across Edit → Preview → Edit for the current note. The design spec's “Preserve the writing session across Preview” section supersedes this plan's original unmount-on-toggle approach. Task 12's toggle/lifecycle steps (especially Step 9's conditional editor mount) must be revised, and Task 13 must cover the new browser acceptance checks, before this plan is dispatched. The code examples below are not yet an executable plan for the revised requirement.
+> **Approved lifecycle requirements — 2026-09-16.** Preserve undo/redo history, cursor/selection, and editing scroll position across Edit → Preview → Edit for the current note. Tasks 10–15 implement the approved color contract, parser-backed decorations, independent preview scroll restoration, and a persistent editor instance; they supersede the archived drafts in git history.
 
-> **Preview position decision — option B, confirmed 2026-09-16.** First Preview starts at the top; later Preview visits within the same note-open session restore the last preview scroll offset. Editing and preview positions are independent. Switching notes or reloading clears the saved position. Task 11 must adopt the spec's updated `MarkdownPreviewProps` and scroll restoration; Task 12 must retain/reset the preview offset; Task 13 must verify repeated toggles, outline navigation, content changes, images, and note/reload resets.
+> **Preview position decision — option B, confirmed 2026-09-16.** First Preview starts at the top; later Preview visits within the same note-open session restore the last preview scroll offset. Editing and preview positions are independent. Switching notes or reloading clears the saved position. Tasks 12–14 implement this behavior; Tasks 14–15 verify it.
 
 **Goal:** Replace the PLAIN/RICH editor toggle with a single Markdown editor plus a Preview view that renders the note's Markdown as HTML with a heading-based outline on the left.
 
-> **Editor readability decisions — approved 2026-09-16.** The user approved showing inline-code delimiters while the cursor/selection is in the code span and hiding them otherwise, without changing Markdown content or undo history. Add a focused editor-decoration task and interaction verification before dispatching this plan. The shared color specification in `docs/superpowers/specs/2026-09-16-markdown-color-guidelines.md` is approved and binding. The authoritative revised Tasks 10–15 use the shared tokens instead of the old literal colors. Use one amber code token for inline and block code; retain separate secondary/syntax tokens. Visual assessment of large code blocks follows implementation.
+> **Editor readability decisions — approved 2026-09-16.** Show inline-code delimiters while the cursor/selection is in the code span and hide them otherwise, without changing Markdown content or undo history. Task 11 adds the editor decorations. The shared color specification in `docs/superpowers/specs/2026-09-16-markdown-color-guidelines.md` is approved and binding. Tasks 10–15 use shared tokens: one amber code token for inline and block code, with separate secondary/syntax tokens. Visual assessment of large code blocks follows implementation.
 
 **Architecture:** A new pure module (`src/lib/markdown/render-html.ts`) parses Markdown with `@lezer/markdown` (GFM-configured) and walks the resulting syntax tree once to produce both an HTML string and a heading list, escaping all text/attributes and allowlisting link/image URL schemes as it goes. `EditorCanvas` drops its PLAIN `<textarea>` branch entirely and gains a local, ephemeral `previewMode` flag. The current note's CodeMirror editor stays mounted but hidden during Preview; a new `MarkdownPreview` component owns rendering and wraps a new `MarkdownOutline` component (click-to-scroll heading list).
 
@@ -1265,804 +1265,1053 @@ git commit -m "test(markdown): pin xss and raw-html security boundary"
 
 ---
 
-## Archived draft Tasks 10–13 (reference only — do not execute)
 
-The original UI task blocks below are retained only as historical context. They predate the approved editor-state, preview-position, decoration, and color requirements. Execute the authoritative revised Tasks 10–15 that follow the archived block instead.
+## Task 10: Share semantic colors and style both Markdown surfaces
 
-## Archived draft Task 10: `MarkdownOutline.tsx`
+**Files:** Modify `src/app/globals.css`, replace `src/components/editor/markdown-theme.ts`.
+**Interfaces:** CSS custom properties `--md-*` are the only color source. Existing exports `markdownHighlightStyle` and `markdownEditorTheme` remain unchanged. Task 11 emits the `.cm-md-*` classes consumed here. No package changes.
 
-No unit test — this repo has no component-level test convention (only `src/lib/**/*.ts` pure modules have `.test.ts` files; verify with `find src/components -name "*.test.*"`, expect no results). Correctness is checked manually in Task 13's browser pass.
+- [ ] **Step 1: Replace `markdown-theme.ts` with this implementation.**
 
-**Files:**
-- Create: `src/components/editor/MarkdownOutline.tsx`
+```ts
+import { HighlightStyle } from '@codemirror/language';
+import { tags } from '@lezer/highlight';
+import { EditorView } from '@codemirror/view';
 
-**Interfaces:**
-- Consumes: `Heading` type (`src/lib/markdown/render-html.ts`, Task 3/6).
-- Produces: default-exported `MarkdownOutline` component, consumed by `MarkdownPreview` (Task 11).
+export const markdownHighlightStyle = HighlightStyle.define([
+  { tag: tags.heading, color: 'var(--md-heading)', fontWeight: 'bold' },
+  { tag: tags.strong, color: 'var(--md-heading)', fontWeight: 'bold' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.strikethrough, textDecoration: 'line-through' },
+  { tag: tags.link, color: 'var(--md-link)', textDecoration: 'underline',
+    textDecorationColor: 'var(--md-link)' },
+  { tag: tags.url, color: 'var(--md-link)' },
+  { tag: tags.quote, color: 'var(--md-secondary)' },
+  { tag: tags.processingInstruction, color: 'var(--md-syntax)' },
+]);
 
-- [ ] **Step 1: Write the component**
+export const markdownEditorTheme = EditorView.theme({
+  '&': { backgroundColor: 'var(--md-canvas)', color: 'var(--md-text)', height: '100%' },
+  '.cm-scroller': { overflow: 'auto' },
+  '.cm-content': { fontSize: '0.875rem', lineHeight: '1.625', caretColor: 'var(--md-link)' },
+  '.cm-gutters': { display: 'none' },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-md-heading-line': {
+    color: 'var(--md-heading)', fontWeight: '700', lineHeight: '1.3',
+    paddingTop: '0.8em', paddingBottom: '0.35em',
+  },
+  '.cm-md-heading-1': { fontSize: '2em' },
+  '.cm-md-heading-2': { fontSize: '1.65em' },
+  '.cm-md-heading-3': { fontSize: '1.4em' },
+  '.cm-md-heading-4': { fontSize: '1.2em' },
+  '.cm-md-heading-5, .cm-md-heading-6': { fontSize: '1em' },
+  '.cm-md-list-marker': { color: 'var(--md-list-marker) !important' },
+  '.cm-md-syntax-mark': { color: 'var(--md-syntax)' },
+  '.cm-md-quote-line': {
+    color: 'var(--md-secondary)', fontStyle: 'italic',
+    borderLeft: '3px solid var(--md-quote-border)', paddingLeft: '1em',
+  },
+  '.cm-md-inline-code': {
+    color: 'var(--md-code-text)', backgroundColor: 'var(--md-code-bg)',
+    borderRadius: '0.2em', padding: '0 0.3em',
+  },
+  '.cm-md-inline-code *': { color: 'var(--md-code-text)' },
+  '.cm-md-inline-code .cm-md-code-mark, .cm-md-code-mark': { color: 'var(--md-syntax)' },
+  '.cm-md-code-line': {
+    color: 'var(--md-code-text)', backgroundColor: 'var(--md-code-bg)', fontStyle: 'normal',
+    borderLeft: '1px solid var(--md-border)', borderRight: '1px solid var(--md-border)',
+    paddingLeft: '16px', paddingRight: '16px',
+  },
+  '.cm-md-code-line *': { color: 'var(--md-code-text)' },
+  '.cm-md-code-line .cm-md-code-mark': { color: 'var(--md-syntax)' },
+  '.cm-md-code-line .cm-md-code-info': { color: 'var(--md-secondary)' },
+  '.cm-md-code-first': {
+    borderTop: '1px solid var(--md-border)', borderTopLeftRadius: '8px',
+    borderTopRightRadius: '8px', paddingTop: '12px',
+  },
+  '.cm-md-code-last': {
+    borderBottom: '1px solid var(--md-border)', borderBottomLeftRadius: '8px',
+    borderBottomRightRadius: '8px', paddingBottom: '12px',
+  },
+  '.cm-search-match, .cm-search-match *': {
+    backgroundColor: 'var(--md-search-bg) !important', color: 'var(--md-search-text) !important',
+    borderRadius: '0.125rem',
+  },
+  '.cm-content::selection, .cm-content *::selection': {
+    backgroundColor: 'var(--md-selection-bg) !important',
+    color: 'var(--md-selection-text) !important',
+  },
+}, { dark: true });
+```
 
-```tsx
-// src/components/editor/MarkdownOutline.tsx
-'use client';
+`tags.list` and `tags.monospace` are deliberately absent: list nodes cover prose, and generic monospace highlighting cannot paint blank code lines or distinguish delimiters. CodeMirror selectors stay inside `EditorView.theme`; global CSS contains only shared tokens, surface-level backgrounds, and Preview selectors.
 
-import React from 'react';
-import type { Heading } from '@/lib/markdown/render-html';
+- [ ] **Step 2: Append these shared tokens and preview styles to `globals.css`.** Keep the application's existing styles; replace any existing Markdown-specific purple code rules if present, rather than leaving a competing Markdown palette.
 
-interface MarkdownOutlineProps {
-  headings: Heading[];
-  containerRef: React.RefObject<HTMLElement | null>;
+```css
+:root {
+  --md-canvas: #09090b;
+  --md-text: #d4d4d8;
+  --md-heading: #f4f4f5;
+  --md-secondary: #a1a1aa;
+  --md-syntax: #a1a1aa;
+  --md-list-marker: #818cf8;
+  --md-link: #818cf8;
+  --md-code-text: #fcd34d;
+  --md-code-bg: #18181b;
+  --md-border: #3f3f46;
+  --md-quote-border: #52525b;
+  --md-selection-bg: #312e81;
+  --md-selection-text: #f4f4f5;
+  --md-search-bg: #854d0e;
+  --md-search-text: #fef3c7;
+}
+.md-preview, .md-editor-surface {
+  color: var(--md-text);
+  background: var(--md-canvas);
+}
+.md-preview { line-height: 1.7; overflow-wrap: anywhere; }
+.md-preview :is(h1,h2,h3,h4,h5,h6) {
+  color: var(--md-heading); font-weight: 700; line-height: 1.3;
+  margin: 1.5em 0 0.6em; scroll-margin-top: 1.5rem;
+}
+.md-preview h1 { font-size: 2em; }
+.md-preview h2 { font-size: 1.65em; }
+.md-preview h3 { font-size: 1.4em; }
+.md-preview h4 { font-size: 1.2em; }
+.md-preview :is(h5,h6) { font-size: 1em; }
+.md-preview p { margin: 0.8em 0; }
+.md-preview strong { color: var(--md-heading); font-weight: 700; }
+.md-preview em { font-style: italic; }
+.md-preview del { text-decoration: line-through; }
+.md-preview a { color: var(--md-link); text-decoration: underline; text-decoration-color: var(--md-link); }
+.md-preview ul { list-style: disc; }
+.md-preview ol { list-style: decimal; }
+.md-preview :is(ul,ol) { padding-left: 1.6em; margin: 0.8em 0; }
+.md-preview li { color: var(--md-text); margin: 0.3em 0; }
+.md-preview li::marker { color: var(--md-list-marker); }
+.md-preview code {
+  color: var(--md-code-text); background: var(--md-code-bg);
+  border-radius: 0.2em; padding: 0 0.3em; font-family: var(--font-mono, monospace);
+}
+.md-preview a code { color: var(--md-code-text); }
+.md-preview pre {
+  color: var(--md-code-text); background: var(--md-code-bg);
+  border: 1px solid var(--md-border); border-radius: 8px;
+  padding: 12px 16px; margin: 1em 0; overflow-x: auto;
+  white-space: pre; overflow-wrap: normal;
+}
+.md-preview pre code { padding: 0; border-radius: 0; background: transparent; }
+.md-preview blockquote {
+  color: var(--md-secondary); border-left: 3px solid var(--md-quote-border);
+  padding-left: 1em; margin: 1em 0; font-style: italic;
+}
+.md-preview table { border-collapse: collapse; display: block; overflow-x: auto; margin: 1em 0; }
+.md-preview :is(th,td) { border: 1px solid var(--md-border); padding: 0.5em 0.75em; }
+.md-preview th { color: var(--md-heading); font-weight: 700; }
+.md-preview img { max-width: 100%; height: auto; }
+.md-preview hr { border: 0; border-top: 1px solid var(--md-border); margin: 1.5em 0; }
+/* Native selection paints over marks, including nested syntax/search decorations.
+   Do not add drawSelection: its background layer cannot override text colors. */
+.md-preview::selection, .md-preview *::selection {
+  background: var(--md-selection-bg) !important;
+  color: var(--md-selection-text) !important;
+}
+```
+
+- [ ] **Step 3: Verify types and formatting.** Run `npm run lint`, `npm run format:check`, and `npm run typecheck`. If formatting fails, run `npx prettier --write src/components/editor/markdown-theme.ts src/app/globals.css`, then repeat all three checks. Expected: all pass. Do not add unit tests comparing token strings with themselves. Actual computed colors and contrast are exercised in Task 15.
+- [ ] **Step 4: Commit.** Run `git add src/app/globals.css src/components/editor/markdown-theme.ts` then `git commit -m "feat(markdown): share semantic colors"`.
+
+## Task 11: Add parser-backed editor decorations with real EditorView tests
+
+**Files:** Create `src/components/editor/markdown-decorations.ts`, `src/components/editor/markdown-decorations.test.ts`; modify `src/components/editor/MarkdownEditor.tsx`.
+**Interfaces:** Export `markdownDecorations: Extension`; CommonMark parsing remains `markdown()` unchanged. All replacements are inline and non-atomic: clicking code and normal cursor movement remain possible. `StateField<DecorationSet>` supplies line-affecting decorations directly to the view; do not return block/line-height decorations from a viewport-only view plugin.
+
+- [ ] **Step 1: Add the complete jsdom test file.**
+
+```ts
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from 'vitest';
+import { EditorSelection, EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { history, undo, redo } from '@codemirror/commands';
+import { markdown } from '@codemirror/lang-markdown';
+import { markdownDecorations } from './markdown-decorations';
+
+let view: EditorView | undefined;
+afterEach(() => { view?.destroy(); document.body.replaceChildren(); });
+function mount(doc: string) {
+  view = new EditorView({ parent: document.body, state: EditorState.create({
+    doc, extensions: [markdown(), history(), markdownDecorations],
+  }) });
+  return view;
+}
+describe('Markdown presentation decorations', () => {
+  it('decorates heading levels without changing heading syntax', () => {
+    const source = '# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six\n\nSetext\n======';
+    const v = mount(source);
+    expect(v.dom.querySelectorAll('.cm-md-heading-line')).toHaveLength(7);
+    for (let level = 1; level <= 6; level++) {
+      expect(v.dom.querySelectorAll(`.cm-md-heading-${level}`)).toHaveLength(level === 1 ? 2 : 1);
+    }
+    expect(v.state.sliceDoc()).toBe(source);
+    expect(v.contentDOM.textContent).toContain('###### Six');
+  });
+  it('colors only parsed list markers and paints every code line including blanks', () => {
+    const v = mount('- prose with `code`\n\n1. next\n\n```js\na\n\nb\n```');
+    expect(Array.from(v.dom.querySelectorAll('.cm-md-list-marker'), n => n.textContent)).toEqual(['-', '1.']);
+    expect(v.dom.querySelector('.cm-md-list-marker')?.textContent).not.toContain('prose');
+    expect(v.dom.querySelectorAll('.cm-md-code-line')).toHaveLength(5);
+    expect(v.dom.querySelectorAll('.cm-md-code-first')).toHaveLength(1);
+    expect(v.dom.querySelectorAll('.cm-md-code-last')).toHaveLength(1);
+    expect(v.dom.querySelector('.cm-md-code-info')?.textContent).toBe('js');
+  });
+  it('uses a structural border and italic secondary text for every quote line', () => {
+    const v = mount('> first\n> second');
+    expect(v.dom.querySelectorAll('.cm-md-quote-line')).toHaveLength(2);
+    expect(Array.from(v.dom.querySelectorAll('.cm-md-code-mark'), n => n.textContent)).toEqual([]);
+  });
+  it('paints indented code and nested list code including blank lines', () => {
+    const v = mount('    a\n\n    b\n\n- item\n\n  ```\n  c\n\n  d\n  ```');
+    expect(v.dom.querySelectorAll('.cm-md-code-line')).toHaveLength(8);
+    expect(v.dom.querySelectorAll('.cm-md-code-first')).toHaveLength(2);
+    expect(v.dom.querySelectorAll('.cm-md-code-last')).toHaveLength(2);
+  });
+  it('hides both parsed multi-backtick delimiters, preserves a literal backtick, and reveals on cursor/selection', () => {
+    const source = 'x ``a ` b`` end';
+    const v = mount(source);
+    expect(v.contentDOM.textContent).toBe('x a ` b end');
+    expect(v.state.sliceDoc()).toBe(source);
+    v.dispatch({ selection: { anchor: 5 } });
+    expect(v.contentDOM.textContent).toBe(source);
+    expect(Array.from(v.dom.querySelectorAll('.cm-md-code-mark'), n => n.textContent)).toEqual(['``', '``']);
+    v.dispatch({ selection: EditorSelection.range(0, 5) });
+    expect(v.contentDOM.textContent).toBe(source);
+    v.dispatch({ selection: { anchor: source.length } });
+    expect(v.contentDOM.textContent).toBe('x a ` b end');
+  });
+  it('leaves fences and unpaired backticks intact and never changes undo history', () => {
+    const v = mount('x `ok` and `unpaired\n\n```\n`literal`\n```');
+    const before = v.state.doc.toString();
+    v.dispatch({ selection: { anchor: 4 } });
+    v.dispatch({ selection: { anchor: 0 } });
+    expect(undo(v)).toBe(false);
+    expect(v.contentDOM.textContent).toContain('```');
+    expect(v.contentDOM.textContent).toContain('`literal`');
+    expect(v.contentDOM.textContent).toContain('`unpaired');
+    v.dispatch({ changes: { from: 0, insert: 'edit ' } });
+    expect(undo(v)).toBe(true);
+    expect(v.state.doc.toString()).toBe(before);
+    expect(redo(v)).toBe(true);
+    expect(v.state.doc.toString()).toBe('edit ' + before);
+  });
+  it('copies original Markdown through CodeMirror even when code is visually hidden', () => {
+    const v = mount('x `code` y');
+    // CodeMirror copies the current logical line for an empty selection.
+    const copied: Record<string, string> = {};
+    const event = new Event('copy', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: {
+      clearData() {}, setData(type: string, value: string) { copied[type] = value; },
+    } });
+    v.contentDOM.dispatchEvent(event);
+    expect(copied['text/plain']).toBe('x `code` y');
+  });
+});
+```
+
+- [ ] **Step 2: Run `npm test -- src/components/editor/markdown-decorations.test.ts`.** Expected: module-not-found failure for the new extension.
+- [ ] **Step 3: Create the extension.**
+
+```ts
+import { type Extension, type Range, StateField, type EditorState } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
+
+function decorations(state: EditorState): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const mark = (from: number, to: number, className: string) => {
+    if (from < to) ranges.push(Decoration.mark({ class: className }).range(from, to));
+  };
+  // State-field decorations must include offscreen code boundaries. Ask the
+  // incremental parser for the complete tree, falling back to its current tree.
+  const tree = ensureSyntaxTree(state, state.doc.length, 100) ?? syntaxTree(state);
+  tree.iterate({ enter(node) {
+    const heading = /^(?:ATX|Setext)Heading([1-6])$/.exec(node.name);
+    if (heading) {
+      ranges.push(Decoration.line({
+        class: `cm-md-heading-line cm-md-heading-${heading[1]}`,
+      }).range(state.doc.lineAt(node.from).from));
+    }
+    if (node.name === 'ListMark') mark(node.from, node.to, 'cm-md-list-marker');
+    if (node.name === 'QuoteMark') mark(node.from, node.to, 'cm-md-syntax-mark');
+    if (node.name === 'Blockquote') {
+      const first = state.doc.lineAt(node.from).number;
+      const last = state.doc.lineAt(Math.max(node.from, node.to - 1)).number;
+      for (let number = first; number <= last; number++) {
+        ranges.push(Decoration.line({ class: 'cm-md-quote-line' }).range(state.doc.line(number).from));
+      }
+    }
+    if (node.name === 'InlineCode') {
+      mark(node.from, node.to, 'cm-md-inline-code');
+      const revealed = state.selection.ranges.some(range => range.empty
+        ? range.from >= node.from && range.from <= node.to
+        : range.from < node.to && range.to > node.from);
+      for (let child = node.node.firstChild; child; child = child.nextSibling) {
+        if (child.name !== 'CodeMark') continue;
+        if (revealed) mark(child.from, child.to, 'cm-md-code-mark');
+        else ranges.push(Decoration.replace({}).range(child.from, child.to));
+      }
+      return false;
+    }
+    if (node.name === 'FencedCode' || node.name === 'CodeBlock') {
+      const first = state.doc.lineAt(node.from).number;
+      const last = state.doc.lineAt(Math.max(node.from, node.to - 1)).number;
+      for (let number = first; number <= last; number++) {
+        const classes = ['cm-md-code-line'];
+        if (number === first) classes.push('cm-md-code-first');
+        if (number === last) classes.push('cm-md-code-last');
+        ranges.push(Decoration.line({ class: classes.join(' ') }).range(state.doc.line(number).from));
+      }
+      for (let child = node.node.firstChild; child; child = child.nextSibling) {
+        if (child.name === 'CodeMark') mark(child.from, child.to, 'cm-md-code-mark');
+        if (child.name === 'CodeInfo') mark(child.from, child.to, 'cm-md-code-info');
+      }
+      return false;
+    }
+  } });
+  return Decoration.set(ranges, true);
 }
 
-const MarkdownOutline: React.FC<MarkdownOutlineProps> = ({ headings, containerRef }) => {
-  const handleClick = (id: string) => {
-    containerRef.current
-      ?.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
-      ?.scrollIntoView({ block: 'start' });
-  };
+const field = StateField.define<DecorationSet>({
+  create: decorations,
+  update(value, transaction) {
+    return transaction.docChanged || transaction.selection ||
+      syntaxTree(transaction.startState) !== syntaxTree(transaction.state)
+      ? decorations(transaction.state) : value;
+  },
+  provide: value => EditorView.decorations.from(value),
+});
+export const markdownDecorations: Extension = field;
+```
 
-  return (
-    <nav className="hidden w-48 shrink-0 overflow-y-auto border-r border-zinc-800 p-3 md:block">
-      <ul className="space-y-1">
-        {headings.map((heading) => (
-          <li key={heading.id} style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}>
-            <button
-              onClick={() => handleClick(heading.id)}
-              className="w-full truncate rounded px-2 py-1 text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-              title={heading.text}
-            >
-              {heading.text}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
+- [ ] **Step 4: Integrate the extension in `MarkdownEditor.tsx`.** Add `import { markdownDecorations } from './markdown-decorations';` and insert `markdownDecorations,` immediately after `markdownEditorTheme,` in the extensions array. Do not replace `markdown()` with GFM or add language highlighting.
+- [ ] **Step 5: Run `npm test -- src/components/editor/markdown-decorations.test.ts`, `npm run lint`, `npm run format:check`, and `npm run typecheck`.** Expected: seven tests pass, with actual CodeMirror DOM and clipboard handler exercised. jsdom cannot establish click coordinates or native selection colors; Task 15 covers those in Chromium.
+- [ ] **Step 6: Commit.** Run `git add src/components/editor/markdown-decorations.ts src/components/editor/markdown-decorations.test.ts src/components/editor/MarkdownEditor.tsx` then `git commit -m "feat(editor): decorate markdown structure"`.
+
+## Task 12: Restore preview offsets without discarding pending image layout
+
+**Files:** Create `src/components/editor/preview-scroll.ts`, `src/components/editor/preview-scroll.test.ts`.
+**Interfaces:** `restorePreviewScroll(container: HTMLElement, requested: number, report: (top: number) => void): () => void`. A pending image can temporarily reduce the maximum offset; keep the requested offset until all images settle. Report actual positions on manual scroll and outline navigation; cleanup removes every listener and observer. Every Preview mount gets its own controller.
+
+- [ ] **Step 1: Add these helper tests.**
+
+```ts
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { restorePreviewScroll } from './preview-scroll';
+const originalResizeObserver = globalThis.ResizeObserver;
+const disconnect = vi.fn();
+beforeEach(() => {
+  disconnect.mockClear();
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect = () => disconnect();
+  } as unknown as typeof ResizeObserver;
+});
+afterEach(() => {
+  globalThis.ResizeObserver = originalResizeObserver;
+  document.body.replaceChildren();
+});
+function fixture(pending = false) {
+  const element = document.createElement('div');
+  const image = document.createElement('img');
+  element.append(image);
+  let height = 300;
+  Object.defineProperties(element, {
+    scrollHeight: { get: () => height }, clientHeight: { value: 100 },
+  });
+  let complete = !pending;
+  Object.defineProperty(image, 'complete', { get: () => complete });
+  return { element, image, grow: (next: number) => { height = next; },
+    load: () => { complete = true; image.dispatchEvent(new Event('load')); } };
+}
+describe('preview offset restoration', () => {
+  it('starts at zero and clamps completed shorter content', () => {
+    const f = fixture(); const report = vi.fn();
+    let dispose = restorePreviewScroll(f.element, 0, report);
+    expect(f.element.scrollTop).toBe(0); dispose();
+    dispose = restorePreviewScroll(f.element, 900, report);
+    expect(f.element.scrollTop).toBe(200); expect(report).toHaveBeenLastCalledWith(200);
+    dispose();
+  });
+  it('does not commit a premature clamp before images load', () => {
+    const f = fixture(true); const report = vi.fn();
+    const dispose = restorePreviewScroll(f.element, 800, report);
+    expect(f.element.scrollTop).toBe(200); expect(report).not.toHaveBeenCalled();
+    f.element.dispatchEvent(new Event('scroll'));
+    expect(report).not.toHaveBeenCalled();
+    f.grow(1200); f.load();
+    expect(f.element.scrollTop).toBe(800); expect(report).toHaveBeenLastCalledWith(800);
+    dispose();
+  });
+  it.each(['wheel', 'touchstart', 'pointerdown', 'keydown', 'preview-navigation'])(
+    '%s cancels pending restoration and subsequent scroll reports the user position', eventName => {
+      const f = fixture(true); const report = vi.fn();
+      const dispose = restorePreviewScroll(f.element, 800, report);
+      f.element.dispatchEvent(new Event(eventName));
+      f.element.scrollTop = 70; f.element.dispatchEvent(new Event('scroll'));
+      expect(report).toHaveBeenLastCalledWith(70);
+      f.grow(1200); f.load(); expect(f.element.scrollTop).toBe(70);
+      dispose();
+    },
   );
-};
+  it('waits for every image to load or fail before committing the restored offset', () => {
+    const f = fixture(true); const second = document.createElement('img');
+    let secondComplete = false;
+    Object.defineProperty(second, 'complete', { get: () => secondComplete });
+    f.element.append(second); const report = vi.fn();
+    const dispose = restorePreviewScroll(f.element, 800, report);
+    f.grow(1200); f.load(); expect(report).not.toHaveBeenCalled();
+    secondComplete = true; second.dispatchEvent(new Event('error'));
+    expect(f.element.scrollTop).toBe(800); expect(report).toHaveBeenLastCalledWith(800);
+    dispose();
+  });
+  it('settles failed images and ignores late events after unmount', () => {
+    const f = fixture(true); const report = vi.fn();
+    const dispose = restorePreviewScroll(f.element, 800, report);
+    f.image.dispatchEvent(new Event('error'));
+    expect(report).toHaveBeenLastCalledWith(200);
+    dispose(); report.mockClear(); f.grow(1400); f.load();
+    f.element.dispatchEvent(new Event('scroll')); expect(report).not.toHaveBeenCalled();
+    expect(disconnect).toHaveBeenCalled();
+  });
+});
+```
 
+- [ ] **Step 2: Run `npm test -- src/components/editor/preview-scroll.test.ts`.** Expected: missing-module failure.
+- [ ] **Step 3: Implement the helper.**
+
+```ts
+export function restorePreviewScroll(
+  container: HTMLElement, requested: number, report: (top: number) => void,
+): () => void {
+  const images = Array.from(container.querySelectorAll('img'));
+  const pending = new Set(images.filter(image => !image.complete));
+  let restoring = true;
+  let disposed = false;
+  let observer: ResizeObserver | undefined;
+  const apply = () => {
+    if (disposed || !restoring) return;
+    const maximum = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTop = Math.min(Math.max(0, requested), maximum);
+    if (pending.size === 0) {
+      restoring = false;
+      report(container.scrollTop);
+      observer?.disconnect();
+    }
+  };
+  const cancel = () => { restoring = false; observer?.disconnect(); };
+  const scroll = () => { if (!restoring) report(container.scrollTop); };
+  const settled = (event: Event) => { pending.delete(event.currentTarget as HTMLImageElement); apply(); };
+  images.forEach(image => {
+    image.addEventListener('load', settled);
+    image.addEventListener('error', settled);
+  });
+  container.addEventListener('scroll', scroll);
+  // Outline dispatches this event before scrolling, including while an image is pending.
+  container.addEventListener('preview-navigation', cancel);
+  container.addEventListener('wheel', cancel, { passive: true });
+  container.addEventListener('touchstart', cancel, { passive: true });
+  container.addEventListener('pointerdown', cancel);
+  container.addEventListener('keydown', cancel);
+  if (typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(apply);
+    observer.observe(container);
+    if (container.firstElementChild) observer.observe(container.firstElementChild);
+  }
+  apply();
+  return () => {
+    disposed = true; observer?.disconnect();
+    images.forEach(image => {
+      image.removeEventListener('load', settled);
+      image.removeEventListener('error', settled);
+    });
+    container.removeEventListener('scroll', scroll);
+    container.removeEventListener('preview-navigation', cancel);
+    container.removeEventListener('wheel', cancel);
+    container.removeEventListener('touchstart', cancel);
+    container.removeEventListener('pointerdown', cancel);
+    container.removeEventListener('keydown', cancel);
+  };
+}
+```
+
+- [ ] **Step 4: Run `npm test -- src/components/editor/preview-scroll.test.ts`, `npm run lint`, `npm run format:check`, and `npm run typecheck`.** Expected: nine cases pass (the five-event cancellation table expands into five tests). DOM dimensions are explicitly controlled: this tests the restoration policy, not browser layout.
+- [ ] **Step 5: Commit.** Run `git add src/components/editor/preview-scroll.ts src/components/editor/preview-scroll.test.ts` then `git commit -m "feat(editor): preserve preview scroll through images"`.
+
+## Task 13: Render Preview and a scoped, responsive outline
+
+**Files:** Create `src/components/editor/MarkdownOutline.tsx`, `src/components/editor/MarkdownPreview.tsx`, `src/components/editor/MarkdownPreview.test.tsx`.
+**Interfaces:** Consume `renderMarkdown(content: string): { html: string; headings: Heading[] }` and exported `Heading` from `@/lib/markdown/render-html`. Preview props are exactly `content`, `initialScrollTop`, and `onScrollPositionChange`. Outline receives `headings` and `containerRef: RefObject<HTMLDivElement | null>`. EditorCanvas holds the offset; Preview owns the DOM.
+
+- [ ] **Step 1: Add the component tests.**
+
+```tsx
+// @vitest-environment jsdom
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import MarkdownPreview from './MarkdownPreview';
+const reactGlobals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const previousActEnvironment = reactGlobals.IS_REACT_ACT_ENVIRONMENT;
+const previousCss = globalThis.CSS;
+let cleanup = () => {};
+beforeEach(() => { reactGlobals.IS_REACT_ACT_ENVIRONMENT = true; });
+afterEach(() => {
+  cleanup(); cleanup = () => {};
+  reactGlobals.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+  Object.defineProperty(globalThis, 'CSS', { configurable: true, value: previousCss });
+  document.body.replaceChildren();
+});
+it('omits outline for heading-free content and rerenders the current draft', async () => {
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host); cleanup = () => { act(() => root.unmount()); host.remove(); };
+  const report = vi.fn();
+  await act(async () => root.render(<MarkdownPreview content="draft" initialScrollTop={0} onScrollPositionChange={report} />));
+  expect(host.querySelector('nav')).toBeNull();
+  expect(host.querySelector('.md-preview')?.textContent).toBe('draft');
+  await act(async () => root.render(<MarkdownPreview content="# New draft" initialScrollTop={0} onScrollPositionChange={report} />));
+  expect(host.querySelector('h1')?.textContent?.trim()).toBe('New draft');
+  expect(host.querySelector('nav button')?.textContent).toBe('New draft');
+});
+it('scopes Unicode outline targets to its own preview', async () => {
+  Object.defineProperty(globalThis, 'CSS', { configurable: true, value: { escape: (value: string) => value } });
+  const outside = document.createElement('h1'); outside.id = '架构'; document.body.append(outside);
+  const wrong = vi.fn(); outside.scrollIntoView = wrong;
+  const host = document.createElement('div'); document.body.append(host);
+  const root = createRoot(host); cleanup = () => { act(() => root.unmount()); host.remove(); outside.remove(); };
+  await act(async () => root.render(<MarkdownPreview content="# 架构" initialScrollTop={0} onScrollPositionChange={() => {}} />));
+  const target = host.querySelector('h1')!;
+  const order: string[] = [];
+  host.querySelector('[data-testid="markdown-preview-scroll"]')!
+    .addEventListener('preview-navigation', () => order.push('navigation'));
+  target.scrollIntoView = vi.fn(() => order.push('scroll'));
+  host.querySelector('button')!.click();
+  expect(target.scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  expect(order).toEqual(['navigation', 'scroll']);
+  expect(wrong).not.toHaveBeenCalled();
+});
+```
+
+- [ ] **Step 2: Run `npm test -- src/components/editor/MarkdownPreview.test.tsx`.** Expected: missing-module failure.
+- [ ] **Step 3: Create `MarkdownOutline.tsx`.**
+
+```tsx
+'use client';
+import React, { type RefObject } from 'react';
+import type { Heading } from '@/lib/markdown/render-html';
+interface MarkdownOutlineProps {
+  headings: Heading[];
+  containerRef: RefObject<HTMLDivElement | null>;
+}
+const MarkdownOutline: React.FC<MarkdownOutlineProps> = ({ headings, containerRef }) => {
+  if (headings.length === 0) return null;
+  return <nav aria-label="Markdown outline" className="hidden w-48 shrink-0 overflow-auto border-r border-zinc-800 p-3 md:block">
+    <ul className="space-y-1">
+      {headings.map(heading => <li key={heading.id}>
+        <button type="button" className="w-full rounded px-2 py-1 text-left text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-indigo-400"
+          style={{ paddingLeft: `${8 + (heading.level - 1) * 12}px` }}
+          onClick={() => {
+            const container = containerRef.current;
+            container?.dispatchEvent(new Event('preview-navigation'));
+            container?.querySelector<HTMLElement>(`#${CSS.escape(heading.id)}`)?.scrollIntoView({ block: 'start' });
+          }}>
+          {heading.text}
+        </button>
+      </li>)}
+    </ul>
+  </nav>;
+};
 export default MarkdownOutline;
 ```
 
-- [ ] **Step 2: Run typecheck**
-
-Run: `npm run typecheck`
-Expected: PASS, no errors from the new file.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/components/editor/MarkdownOutline.tsx
-git commit -m "feat(editor): add markdown outline sidebar component"
-```
-
----
-
-## Archived draft Task 11: `MarkdownPreview.tsx` and preview styles
-
-**Files:**
-- Create: `src/components/editor/MarkdownPreview.tsx`
-- Modify: `src/app/globals.css`
-
-**Interfaces:**
-- Consumes: `renderMarkdown` (`src/lib/markdown/render-html.ts`, Task 3), `MarkdownOutline` (Task 10).
-- Produces: default-exported `MarkdownPreview` component with `{ content: string }` props — this is what `EditorCanvas` renders in Task 12.
-
-- [ ] **Step 1: Write the component**
+- [ ] **Step 4: Create `MarkdownPreview.tsx`.**
 
 ```tsx
-// src/components/editor/MarkdownPreview.tsx
 'use client';
-
-import React, { useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { renderMarkdown } from '@/lib/markdown/render-html';
 import MarkdownOutline from './MarkdownOutline';
-
+import { restorePreviewScroll } from './preview-scroll';
 interface MarkdownPreviewProps {
   content: string;
+  initialScrollTop: number;
+  onScrollPositionChange: (scrollTop: number) => void;
 }
-
-const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ content }) => {
+const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
+  content, initialScrollTop, onScrollPositionChange,
+}) => {
   const { html, headings } = useMemo(() => renderMarkdown(content), [content]);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  return (
-    <div className="flex h-full min-h-0">
-      {headings.length > 0 && <MarkdownOutline headings={headings} containerRef={containerRef} />}
-      <div
-        ref={containerRef}
-        className="md-preview flex-1 overflow-auto"
-        // html comes from renderMarkdown(), which escapes all text/attribute
-        // content and scheme-allowlists link/image URLs before returning —
-        // see src/lib/markdown/render-html.ts. This is the only
-        // dangerouslySetInnerHTML in the codebase, and only safe because of
-        // that renderer's escaping contract.
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+  const offsetRef = useRef(initialScrollTop);
+  const reportRef = useRef(onScrollPositionChange);
+  reportRef.current = onScrollPositionChange;
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    return restorePreviewScroll(container, offsetRef.current, top => {
+      offsetRef.current = top;
+      reportRef.current(top);
+    });
+  }, [html]);
+  return <div className="flex h-full min-h-0 min-w-0 bg-[var(--md-canvas)]">
+    <MarkdownOutline headings={headings} containerRef={containerRef} />
+    <div ref={containerRef} data-testid="markdown-preview-scroll" tabIndex={0}
+      aria-label="Markdown preview" className="min-w-0 flex-1 overflow-auto">
+      <article className="md-preview p-6 md:px-10 lg:px-20" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
-  );
+  </div>;
 };
-
 export default MarkdownPreview;
 ```
 
-- [ ] **Step 2: Add preview styles**
+- [ ] **Step 5: Run `npm test -- src/components/editor/MarkdownPreview.test.tsx src/components/editor/preview-scroll.test.ts`, `npm run lint`, `npm run format:check`, and `npm run typecheck`.** Expected: all focused tests pass; no lint, format, or type errors. Run `rg -n "dangerouslySetInnerHTML" src` and expect exactly one match in `MarkdownPreview.tsx` at the escaped renderer boundary.
+- [ ] **Step 6: Commit.** Run `git add src/components/editor/MarkdownOutline.tsx src/components/editor/MarkdownPreview.tsx src/components/editor/MarkdownPreview.test.tsx` then `git commit -m "feat(editor): add markdown preview outline"`.
 
-Append to `src/app/globals.css`:
+## Task 14: Retain the current editor while integrating Edit/Preview
 
-```css
-/* Rendered Markdown preview — hand-written to match the zinc/indigo dark
-   palette (.claude/rules/styling.md), same pattern as the CodeMirror theme
-   in markdown-theme.ts. No @tailwindcss/typography dependency. */
-.md-preview {
-  padding: 1.5rem;
-  color: #a1a1aa; /* zinc-400 */
-  line-height: 1.7;
-}
-.md-preview h1,
-.md-preview h2,
-.md-preview h3,
-.md-preview h4,
-.md-preview h5,
-.md-preview h6 {
-  color: #f4f4f5; /* zinc-100 */
-  font-weight: 600;
-  margin: 1.2em 0 0.5em;
-}
-.md-preview h1 {
-  font-size: 1.5rem;
-}
-.md-preview h2 {
-  font-size: 1.25rem;
-}
-.md-preview h3 {
-  font-size: 1.1rem;
-}
-.md-preview p {
-  margin: 0.75em 0;
-}
-.md-preview a {
-  color: #818cf8; /* indigo-400 */
-  text-decoration: underline;
-}
-.md-preview code {
-  color: #a78bfa; /* matches inline code color in markdown-theme.ts */
-  background: #1a1a1a;
-  border-radius: 0.25rem;
-  padding: 0.1em 0.35em;
-  font-size: 0.875em;
-}
-.md-preview pre {
-  background: #0f0f0f;
-  border-radius: 0.5rem;
-  padding: 0.75em 1em;
-  overflow-x: auto;
-  margin: 0.75em 0;
-}
-.md-preview pre code {
-  background: none;
-  padding: 0;
-}
-.md-preview blockquote {
-  border-left: 3px solid #3f3f46;
-  padding-left: 1em;
-  margin: 0.75em 0;
-  font-style: italic;
-  color: #a1a1aa;
-}
-.md-preview ul,
-.md-preview ol {
-  margin: 0.75em 0;
-  padding-left: 1.5em;
-}
-.md-preview li {
-  margin: 0.25em 0;
-}
-.md-preview table {
-  border-collapse: collapse;
-  margin: 0.75em 0;
-}
-.md-preview th,
-.md-preview td {
-  border: 1px solid #27272a; /* zinc-800 */
-  padding: 0.4em 0.75em;
-  text-align: left;
-}
-.md-preview img {
-  border-radius: 0.5rem;
-  margin: 0.5em 0;
-}
-.md-preview hr {
-  border: none;
-  border-top: 1px solid #27272a;
-  margin: 1.5em 0;
-}
-```
+**Files:** Modify `src/components/editor/EditorCanvas.tsx`, `src/components/editor/MarkdownEditor.tsx`, `src/app/page.tsx`, `e2e/notes.spec.ts`, `e2e/README.md`, `.claude/rules/markdown.md`; create `src/components/editor/editor-scroll.ts`, `src/components/editor/editor-scroll.test.ts`.
+**Interfaces:** Add `getScrollPosition(): { top: number; left: number }` and `restoreScrollPosition(position, afterMeasure?): void` to `MarkdownEditorHandle`. Keep one mounted editor and one mounted outer scroll wrapper per note. Note boundaries reset the complete `EditorCanvas` state via React key at its parent, not by a passive effect that supplies old content to a newly mounted CodeMirror.
 
-- [ ] **Step 3: Run typecheck**
-
-Run: `npm run typecheck`
-Expected: PASS.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/components/editor/MarkdownPreview.tsx src/app/globals.css
-git commit -m "feat(editor): add markdown preview component and styles"
-```
-
----
-
-## Archived draft Task 12: Wire Preview into `EditorCanvas`, retire the PLAIN/RICH toggle
-
-This is the integration task — it removes the `<textarea>` branch and mode-switch UI, and wires `MarkdownPreview` in.
-
-**Files:**
-- Modify: `src/components/editor/EditorCanvas.tsx`
-
-**Interfaces:**
-- Consumes: `MarkdownPreview` (Task 11).
-- Produces: `EditorCanvas` no longer imports or references `NoteMode`.
-
-- [ ] **Step 1: Update imports**
-
-In `src/components/editor/EditorCanvas.tsx`, change:
+- [ ] **Step 1: Add the editor scroll helper test.**
 
 ```ts
-import type { Folder, Note, NotePayload } from '@/types';
-import { NoteMode, type SaveState } from '@/types';
+// @vitest-environment jsdom
+import { expect, it } from 'vitest';
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { restoreEditorScroll } from './editor-scroll';
+it('restores internal scrolling in CodeMirror measurement write phase', () => {
+  const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'text' }) });
+  let measurement: Parameters<EditorView['requestMeasure']>[0];
+  view.requestMeasure = request => { measurement = request; };
+  let restored = false;
+  restoreEditorScroll(view, { top: 200, left: 30 }, () => { restored = true; });
+  expect(view.scrollDOM.scrollTop).toBe(0);
+  const measured = measurement!.read(view);
+  measurement!.write!(measured, view);
+  expect(view.scrollDOM.scrollTop).toBe(200);
+  expect(view.scrollDOM.scrollLeft).toBe(30); expect(restored).toBe(true);
+  view.destroy(); document.body.replaceChildren();
+});
 ```
 
-to:
+- [ ] **Step 2: Run `npm test -- src/components/editor/editor-scroll.test.ts`.** Expected: missing-module failure. Create the helper:
 
 ```ts
-import type { Folder, Note, NotePayload, SaveState } from '@/types';
+import type { EditorView } from '@codemirror/view';
+export interface EditorScrollPosition { top: number; left: number }
+export function restoreEditorScroll(view: EditorView, position: EditorScrollPosition, afterMeasure?: () => void): void {
+  view.requestMeasure({
+    key: restoreEditorScroll,
+    read: () => position,
+    write: saved => {
+      view.scrollDOM.scrollTop = saved.top;
+      view.scrollDOM.scrollLeft = saved.left;
+      afterMeasure?.();
+    },
+  });
+}
 ```
 
-Change the `lucide-react` icon import — remove `FileCode, Type`, add `Eye, Pencil`:
+- [ ] **Step 3: Make these exact `MarkdownEditor.tsx` changes.**
+
+```diff
++import { restoreEditorScroll, type EditorScrollPosition } from './editor-scroll';
+ export interface MarkdownEditorHandle {
++  getScrollPosition: () => EditorScrollPosition;
++  restoreScrollPosition: (position: EditorScrollPosition, afterMeasure?: () => void) => void;
+```
+
+Add these members at the start of the object returned by `useImperativeHandle`:
 
 ```ts
-import {
-  Pin,
-  Trash2,
-  Copy,
-  Download,
-  Eye,
-  Pencil,
-  AlertCircle,
-  CheckCircle2,
-  ChevronLeft,
-  MoreHorizontal,
-  Folder as FolderIcon,
-} from 'lucide-react';
+getScrollPosition: () => ({
+  top: viewRef.current?.scrollDOM.scrollTop ?? 0,
+  left: viewRef.current?.scrollDOM.scrollLeft ?? 0,
+}),
+restoreScrollPosition: (position, afterMeasure) => {
+  if (viewRef.current) restoreEditorScroll(viewRef.current, position, afterMeasure);
+},
 ```
 
-Add a new import next to the other editor component imports:
+Replace `return () => view.destroy();` with:
+
+```ts
+return () => { viewRef.current = null; view.destroy(); };
+```
+
+Replace the component's final wrapper with:
+
+```tsx
+return <div ref={containerRef} className="h-full font-mono text-sm text-[var(--md-text)]" />;
+```
+
+- [ ] **Step 4: Ensure the parent resets state before mounting a new note.** In `src/app/page.tsx`, the `EditorArea` branch returning `<EditorCanvas>` must begin:
+
+```tsx
+<EditorCanvas
+  key={activeNote.id}
+  ref={editorRef}
+```
+
+All existing remaining props stay as they are. The normal loading path already unmounts the editor, but this key also makes direct ready-note replacement safe. Update the Cmd/Ctrl+K comment to:
+
+```ts
+// Cmd/Ctrl+K focuses search. MarkdownEditor does not bind this shortcut.
+```
+
+- [ ] **Step 5: Replace the mode-dependent imports, refs and note-sync effect in `EditorCanvas.tsx`.** Import `useLayoutEffect` from React. Replace `import { NoteMode, type SaveState } from '@/types';` with `import type { SaveState } from '@/types';`. Replace lucide imports `FileCode, Type` with `Eye, Pencil`. Add:
 
 ```ts
 import MarkdownPreview from './MarkdownPreview';
+import type { EditorScrollPosition } from './editor-scroll';
 ```
 
-- [ ] **Step 2: Replace mode/preview state**
-
-Remove the `textareaRef` declaration and the `currentModeRef` declaration:
+Delete `textareaRef` and `currentModeRef`. After `markdownEditorRef` add:
 
 ```ts
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-```
-```ts
-  const currentModeRef = useRef(note.mode);
-```
-
-Add, next to the other `useState` declarations:
-
-```ts
-  const [previewMode, setPreviewMode] = useState(false);
-```
-
-- [ ] **Step 3: Simplify the note-sync effect**
-
-Replace:
-
-```ts
-  useEffect(() => {
-    currentModeRef.current = note.mode;
-    if (syncedNoteIdRef.current === note.id) return;
-    syncedNoteIdRef.current = note.id;
-    setContent(note.content);
-    contentRef.current = note.content;
-    setLocalTitle(note.title);
-    setSaveState('IDLE');
-    if (autoFocus) {
-      // RICH mode's focus is handled by MarkdownEditor's own autoFocus prop
-      // (it remounts per note.id). The textarea isn't remounted, so PLAIN
-      // mode needs an explicit focus call here.
-      if (note.mode === NoteMode.PLAIN) {
-        textareaRef.current?.focus();
-      }
-      onAutoFocusHandled?.();
-    }
-  }, [note.id, note.title, note.content, note.mode, autoFocus, onAutoFocusHandled]);
-
-  // Auto-resize textarea to match content height
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (note.mode === NoteMode.PLAIN && ta) {
-      ta.style.height = 'auto';
-      ta.style.height = `${ta.scrollHeight}px`;
-    }
-  }, [content, note.mode]);
-```
-
-with:
-
-```ts
-  useEffect(() => {
-    if (syncedNoteIdRef.current === note.id) return;
-    syncedNoteIdRef.current = note.id;
-    setContent(note.content);
-    contentRef.current = note.content;
-    setLocalTitle(note.title);
-    setSaveState('IDLE');
-    setPreviewMode(false); // always open a note in Edit
-    if (autoFocus) {
-      // MarkdownEditor's own autoFocus prop handles focus — it remounts
-      // per note.id (key={note.id}), so a fresh EditorView always picks
-      // this up on its own.
-      onAutoFocusHandled?.();
-    }
-  }, [note.id, note.title, note.content, autoFocus, onAutoFocusHandled]);
-```
-
-- [ ] **Step 4: Drop the mode guard from image paste**
-
-Replace:
-
-```ts
-  const handlePasteImage = useCallback((file: File) => {
-    const pasteNoteId = syncedNoteIdRef.current;
-    // Capture the selection synchronously, at paste time — resizing runs
-    // async (canvas.toDataURL), during which the user can move the cursor
-    // or select other text. Reading the selection only after the resize
-    // resolves would insert the image at the wrong, now-current position.
-    const pasteRange = markdownEditorRef.current?.getSelection() ?? { start: 0, end: 0 };
-    resizeImageToDataURL(file).then((dataUrl) => {
-      if (syncedNoteIdRef.current !== pasteNoteId) return;
-      if (currentModeRef.current !== NoteMode.RICH) return;
-      markdownEditorRef.current?.insertAt(pasteRange, `![${file.name}](${dataUrl})`);
-    });
-  }, []);
-```
-
-with:
-
-```ts
-  const handlePasteImage = useCallback((file: File) => {
-    const pasteNoteId = syncedNoteIdRef.current;
-    // Capture the selection synchronously, at paste time — resizing runs
-    // async (canvas.toDataURL), during which the user can move the cursor
-    // or select other text. Reading the selection only after the resize
-    // resolves would insert the image at the wrong, now-current position.
-    const pasteRange = markdownEditorRef.current?.getSelection() ?? { start: 0, end: 0 };
-    resizeImageToDataURL(file).then((dataUrl) => {
-      if (syncedNoteIdRef.current !== pasteNoteId) return;
-      markdownEditorRef.current?.insertAt(pasteRange, `![${file.name}](${dataUrl})`);
-    });
-  }, []);
-```
-
-- [ ] **Step 5: Replace `handleSwitchMode` with a preview toggle**
-
-Replace:
-
-```ts
-  const handleSwitchMode = () => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    const newMode = note.mode === NoteMode.RICH ? NoteMode.PLAIN : NoteMode.RICH;
-    const textContent = markdownToPlainText(content);
-    persistChange(
-      { mode: newMode, content, textContent, title: localTitle },
-      { showProgressAndSuccess: false },
-    );
-  };
-```
-
-with:
-
-```ts
-  const handleTogglePreview = () => setPreviewMode((v) => !v);
-```
-
-- [ ] **Step 6: Replace the mobile mode-switch button**
-
-Replace:
-
-```tsx
-            <button
-              onClick={handleSwitchMode}
-              className={`rounded-lg p-2.5 transition-all ${
-                note.mode === NoteMode.RICH
-                  ? 'bg-indigo-400/10 text-indigo-400'
-                  : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
-              }`}
-              title="Switch Mode (Cmd+Shift+P)"
-              aria-label="Switch mode"
-            >
-              {note.mode === NoteMode.RICH ? (
-                <FileCode className="h-4 w-4" />
-              ) : (
-                <Type className="h-4 w-4" />
-              )}
-            </button>
-```
-
-with:
-
-```tsx
-            <button
-              onClick={handleTogglePreview}
-              className={`rounded-lg p-2.5 transition-all ${
-                previewMode
-                  ? 'bg-indigo-400/10 text-indigo-400'
-                  : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
-              }`}
-              title={previewMode ? 'Edit' : 'Preview'}
-              aria-label={previewMode ? 'Switch to edit' : 'Switch to preview'}
-              aria-pressed={previewMode}
-            >
-              {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-```
-
-- [ ] **Step 7: Replace the desktop mode-switch button**
-
-Replace:
-
-```tsx
-            <button
-              onClick={handleSwitchMode}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-                note.mode === NoteMode.RICH
-                  ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
-                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
-              title="Switch Mode (Cmd+Shift+P)"
-            >
-              {note.mode === NoteMode.RICH ? (
-                <FileCode className="h-4 w-4" />
-              ) : (
-                <Type className="h-4 w-4" />
-              )}
-              {note.mode}
-            </button>
-```
-
-with:
-
-```tsx
-            <button
-              onClick={handleTogglePreview}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-                previewMode
-                  ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
-                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
-              title={previewMode ? 'Edit' : 'Preview'}
-              aria-pressed={previewMode}
-            >
-              {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              {previewMode ? 'Edit' : 'Preview'}
-            </button>
-```
-
-- [ ] **Step 8: Gate `RichToolbar` on `previewMode`**
-
-Replace:
-
-```tsx
-      {/* Formatting Toolbar for Rich Mode */}
-      {note.mode === NoteMode.RICH && (
-```
-
-with:
-
-```tsx
-      {/* Formatting Toolbar — hidden while previewing */}
-      {!previewMode && (
-```
-
-- [ ] **Step 9: Replace the editor body**
-
-Replace:
-
-```tsx
-      {/* Editor Body */}
-      <div className="flex-1 overflow-auto p-6 font-mono transition-colors md:px-10 lg:px-20">
-        {note.mode === NoteMode.RICH ? (
-          <MarkdownEditor
-            key={note.id}
-            ref={markdownEditorRef}
-            value={content}
-            onChange={(val) => {
-              setContent(val);
-              contentRef.current = val;
-              triggerSave({ content: val });
-            }}
-            onPasteText={handlePasteText}
-            onPasteImage={handlePasteImage}
-            autoFocus={autoFocus}
-            searchQuery={searchQuery}
-          />
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => {
-              const val = e.target.value;
-              setContent(val);
-              contentRef.current = val;
-              triggerSave({ content: val });
-            }}
-            onPaste={(e) => {
-              const items = Array.from(e.clipboardData?.items ?? []);
-              const imageItem = items.find((item) => item.type.startsWith('image/'));
-              if (imageItem) {
-                e.preventDefault();
-                const file = imageItem.getAsFile();
-                const name = file?.name || 'clipboard-image.png';
-                const ta = textareaRef.current;
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const placeholder = `[image: ${name}]`;
-                  const newVal = content.slice(0, start) + placeholder + content.slice(end);
-                  setContent(newVal);
-                  contentRef.current = newVal;
-                  triggerSave({ content: newVal });
-                }
-              }
-            }}
-            placeholder="Start typing plain text..."
-            className="min-h-full w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-zinc-400 focus:outline-none"
-          />
-        )}
-      </div>
-```
-
-with:
-
-```tsx
-      {/* Editor Body */}
-      {/* MarkdownPreview owns its own scrolling, padding, and (via
-          .md-preview) typography — nesting it inside the Edit wrapper's
-          overflow-auto/p-6/font-mono would produce a second scroll
-          container, doubled padding, and monospace bleeding into rendered
-          prose. So the two modes get distinct wrappers, not a shared one
-          with the mode branching only the content inside it. */}
-      {!previewMode ? (
-        <div className="flex-1 overflow-auto p-6 font-mono transition-colors md:px-10 lg:px-20">
-          <MarkdownEditor
-            key={note.id}
-            ref={markdownEditorRef}
-            value={content}
-            onChange={(val) => {
-              setContent(val);
-              contentRef.current = val;
-              triggerSave({ content: val });
-            }}
-            onPasteText={handlePasteText}
-            onPasteImage={handlePasteImage}
-            autoFocus={autoFocus}
-            searchQuery={searchQuery}
-          />
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <MarkdownPreview content={content} />
-        </div>
-      )}
-```
-
-- [ ] **Step 10: Update the footer badge**
-
-Replace:
-
-```tsx
-          <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>
-            {note.mode}
-          </span>
-```
-
-with:
-
-```tsx
-          <span className={previewMode ? 'text-indigo-500' : 'text-zinc-500'}>
-            {previewMode ? 'PREVIEW' : 'EDIT'}
-          </span>
-```
-
-- [ ] **Step 11: Run typecheck and lint**
-
-Run: `npm run typecheck && npm run lint`
-Expected: PASS — no leftover references to `NoteMode`, `FileCode`, `Type`, `textareaRef`, `currentModeRef`, or `handleSwitchMode`. If lint flags an unused import or variable, that's a leftover reference — remove it.
-
-Run: `grep -n "NoteMode\|FileCode\|textareaRef\|currentModeRef\|handleSwitchMode" src/components/editor/EditorCanvas.tsx`
-Expected: no matches.
-
-- [ ] **Step 12: Commit**
-
-```bash
-git add src/components/editor/EditorCanvas.tsx
-git commit -m "feat(editor): replace plain/rich toggle with edit/preview"
-```
-
----
-
-## Archived draft Task 13: Full verification pass
-
-**Files:** none (verification only).
-
-- [ ] **Step 1: Run the full automated suite**
-
-Run: `npm run typecheck && npm run lint && npm test`
-Expected: all PASS.
-
-- [ ] **Step 1b: Two cheap invariant greps**
-
-Run: `grep -rn "dangerouslySetInnerHTML" src`
-Expected: exactly one match, in `src/components/editor/MarkdownPreview.tsx` — if there's a second one anywhere, something bypassed the renderer's escaping contract.
-
-Run: `grep -nE "NoteMode|textareaRef|handleSwitchMode" src/components/editor/EditorCanvas.tsx`
-Expected: no matches — confirms Task 12 fully removed the old mode-toggle machinery rather than leaving a dead branch behind.
-
-- [ ] **Step 2: Manual browser check — start the dev server**
-
-Run: `npm run dev` (background)
-
-- [ ] **Step 3: Manual check — Edit/Preview toggle and RichToolbar visibility**
-
-Open a note. Confirm:
-- The editor is CodeMirror by default (no plain-text `<textarea>` anywhere, no PLAIN/RICH button).
-- Clicking the header's Preview button (`Eye` icon) switches to Preview; `RichToolbar` disappears; the footer badge reads `PREVIEW`.
-- Clicking again (`Pencil` icon) returns to Edit; content is unchanged.
-- Switching to a different note and back always opens in Edit (never remembers a prior Preview state).
-
-- [ ] **Step 4: Manual check — outline**
-
-In a note with several `#`/`##` headings (mix of English and, if convenient, Chinese), switch to Preview. Confirm:
-- The outline appears on the left (desktop/tablet width), hidden on phone width.
-- Clicking an outline entry scrolls the preview to that heading.
-- A note with zero headings shows no outline column at all (not an empty blank strip).
-
-- [ ] **Step 5: Manual check — paste contracts**
-
-- Paste a spreadsheet/terminal-style table (or type the equivalent `| a | b |` / `| --- | --- |` / `| 1 | 2 |` Markdown) and confirm it renders as an actual `<table>` in Preview, not raw pipe text.
-- Paste a screenshot/image into the editor, confirm it inserts as `![filename](data:image/webp;base64,...)`, then switch to Preview and confirm the image renders.
-
-- [ ] **Step 6: Manual check — responsive widths**
-
-Using the browser's responsive/device toolbar, check phone (<768px), tablet (768–1023px), and desktop (≥1024px) widths: Preview toggle and RichToolbar visibility behave correctly at each, no horizontal overflow in Preview.
-
-- [ ] **Step 7: Stop the dev server**
-
-- [ ] **Step 8: Final commit (only if Step 3–6 surfaced fixes)**
-
-If any manual check required a code fix, commit it separately with a message describing the fix (e.g. `fix(editor): ...`). If everything passed as implemented, there is nothing to commit in this step — Task 12's commit already covers the feature.
-
----
-
-## Authoritative revised Task 10: Shared Markdown colors and preview surface styles
-
-**Files:** Modify `src/app/globals.css`, `src/components/editor/markdown-theme.ts`.
-
-**Interfaces:** CSS custom properties `--md-*` are the single color source. Keep the existing exports `markdownHighlightStyle` and `markdownEditorTheme`; do not add another styling dependency.
-
-- [ ] **Step 1: Add the approved tokens to `globals.css`.** Add `--md-canvas:#09090b`, `--md-text:#d4d4d8`, `--md-heading:#f4f4f5`, `--md-secondary:#a1a1aa`, `--md-syntax:#a1a1aa`, `--md-list-marker:#818cf8`, `--md-link:#818cf8`, `--md-code-text:#fcd34d`, `--md-code-bg:#18181b`, `--md-border:#3f3f46`, `--md-quote-border:#52525b`, `--md-selection-bg:#312e81`, `--md-selection-text:#f4f4f5`, `--md-search-bg:#854d0e`, and `--md-search-text:#fef3c7`.
-- [ ] **Step 2: Style `.md-preview`.** Use `md.text` for prose, `md.heading` plus size/weight/spacing for headings, `md.link` with underline for links, marker-only indigo via `li::marker`, amber code on continuous zinc code backgrounds, and the approved border/quote tokens. Lists must explicitly restore `list-style: disc/decimal`; code blocks need a border, 8px radius, `12px 16px` padding, and horizontal overflow. Keep `md.secondary` and `md.syntax` as separate variables even though their initial values match.
-- [ ] **Step 3: Update `markdown-theme.ts`.** Remove `tags.list` and `tags.monospace` rules. Use CSS variables for heading, links, quotes, syntax markers, canvas/text, and caret. Search marks use `md.search-bg`/`md.search-text`; native selection uses `md.selection-bg`/`md.selection-text` and takes precedence. Do not use `tags.list` to color list prose.
-- [ ] **Step 4: Verify.** Run `npm run typecheck` and `npx prettier --check src/components/editor/markdown-theme.ts src/app/globals.css`; format only these files if needed. Commit `feat(editor): share Markdown semantic colors`.
-
-## Authoritative revised Task 11: Parser-backed CodeMirror decorations
-
-**Files:** Create `src/components/editor/markdown-decorations.ts` and `src/components/editor/markdown-decorations.test.ts`; modify `src/components/editor/MarkdownEditor.tsx`.
-
-**Interfaces:** Export `markdownDecorations: Extension`. Decorations must be parser-backed and display-only: no document changes, no replacement of logical clipboard text, and no GFM parser change.
-
-- [ ] **Step 1: Add failing jsdom tests.** Mount a real `EditorView` with `markdown()`, `history()`, and the extension. Assert that list-marker spans contain only `-`/`1.`; every line of fenced and indented code, including blank lines, has a code-line decoration; inline code uses amber class; unselected single- and multi-backtick delimiters are replaced visually while literal backticks inside code remain; selecting or placing the cursor in the span reveals both delimiters; fences and unpaired backticks remain unchanged; `undo`/`redo` and `state.sliceDoc()` are unchanged; a copy event yields the original Markdown including delimiters.
-
-```ts
-// markdown-decorations.test.ts (jsdom)
-import type { Extension } from '@codemirror/state';
-function mount(doc: string, extensions: Extension[]) {
-  const view = new EditorView({ parent: document.body, state: EditorState.create({ doc, extensions }) });
-  return view;
-}
-const source = 'x ``a ` b``\n\n- prose\n\n```js\na\n\nb\n```';
-const view = mount(source, [markdown(), history(), markdownDecorations]);
-expect(view.dom.querySelectorAll('.cm-md-list-marker')[0].textContent).toBe('-');
-expect(view.dom.querySelectorAll('.cm-md-code-line')).toHaveLength(5);
-expect(view.contentDOM.textContent).toContain('x a ` b');
-view.dispatch({ selection: { anchor: 5 } });
-expect(Array.from(view.dom.querySelectorAll('.cm-md-code-mark'), n => n.textContent)).toEqual(['``', '``']);
-expect(view.state.sliceDoc()).toBe(source);
-```
-- [ ] **Step 2: Implement `markdownDecorations`.** Use a `StateField<DecorationSet>` and `ensureSyntaxTree(state, state.doc.length, 100) ?? syntaxTree(state)`. Add `Decoration.mark({class:'cm-md-list-marker'})` for `ListMark`. For `InlineCode`, mark the whole node `cm-md-inline-code`, then use `Decoration.replace({})` on each `CodeMark` unless a selection intersects the node; when revealed, mark delimiters `cm-md-code-mark`. For `FencedCode`/`CodeBlock`, add `Decoration.line` to every source line with `cm-md-code-line`, plus `cm-md-code-first`/`cm-md-code-last`; mark `CodeInfo` as `cm-md-code-info` and fence marks as `cm-md-code-mark`. Recompute on document, selection, or syntax-tree changes, and return the field through `EditorView.decorations.from`.
-- [ ] **Step 3: Integrate and verify.** Add the extension after `markdownEditorTheme` in `MarkdownEditor.tsx`. Run `npm test -- src/components/editor/markdown-decorations.test.ts` and `npm run typecheck`. Commit `feat(editor): decorate Markdown code and list markers`.
-
-## Authoritative revised Task 12: Preview scroll-position controller
-
-**Files:** Create `src/components/editor/preview-scroll.ts` and `src/components/editor/preview-scroll.test.ts`.
-
-**Interfaces:** Export `restorePreviewScroll(container: HTMLElement, requested: number, report: (scrollTop: number) => void): () => void`.
-
-- [ ] **Step 1: Test the controller.** With explicit jsdom `scrollHeight`/`clientHeight`, assert offset 0 on first visit, clamping after completed content becomes shorter, retaining the requested offset while images are pending, restoring it after `load`, reporting manual scroll and outline navigation, cancelling on wheel/touch/pointer/keyboard input, settling failed images, and ignoring late events after cleanup.
-
-```ts
-function fixture({ pendingImage }: { pendingImage: boolean }) {
-  const container = document.createElement('div');
-  const image = document.createElement('img');
-  container.append(image);
-  let height = 300;
-  Object.defineProperties(container, {
-    scrollHeight: { get: () => height }, clientHeight: { value: 100 },
+const [previewMode, setPreviewMode] = useState(false);
+const editorScrollRef = useRef<HTMLDivElement>(null);
+const previewScrollTopRef = useRef(0);
+const editScrollRef = useRef<{ outer: EditorScrollPosition; inner: EditorScrollPosition } | null>(null);
+const rememberPreviewScroll = useCallback((top: number) => { previewScrollTopRef.current = top; }, []);
+const togglePreview = () => {
+  if (!previewMode) {
+    const outer = editorScrollRef.current;
+    editScrollRef.current = {
+      outer: { top: outer?.scrollTop ?? 0, left: outer?.scrollLeft ?? 0 },
+      inner: markdownEditorRef.current?.getScrollPosition() ?? { top: 0, left: 0 },
+    };
+  }
+  setPreviewMode(value => !value);
+};
+useLayoutEffect(() => {
+  const saved = editScrollRef.current;
+  if (previewMode || !saved) return;
+  markdownEditorRef.current?.restoreScrollPosition(saved.inner, () => {
+    const outer = editorScrollRef.current;
+    if (outer) { outer.scrollTop = saved.outer.top; outer.scrollLeft = saved.outer.left; }
   });
-  let complete = !pendingImage;
-  Object.defineProperty(image, 'complete', { get: () => complete });
-  return { container, image, grow: (value: number) => { height = value; }, load: () => {
-    complete = true; image.dispatchEvent(new Event('load'));
-  } };
-}
-const { container, image, grow, load } = fixture({ pendingImage: true });
-const report = vi.fn();
-const dispose = restorePreviewScroll(container, 800, report);
-expect(report).not.toHaveBeenCalled();
-grow(1200); load();
-expect(container.scrollTop).toBe(800);
-expect(report).toHaveBeenLastCalledWith(800);
-dispose();
+}, [previewMode]);
 ```
-- [ ] **Step 2: Implement it.** Track pending images, apply the requested offset on mount and `ResizeObserver` changes, defer the final report until all images settle, and clean up image listeners, scroll/navigation listeners, and observer. `preview-navigation` is dispatched by outline clicks before `scrollIntoView`. User input cancels restoration so a deliberate scroll is never overwritten.
-- [ ] **Step 3: Run `npm test -- src/components/editor/preview-scroll.test.ts` and commit** `feat(editor): preserve preview reading offset through image loading`.
 
-## Authoritative revised Task 13: Outline and Preview components
-
-**Files:** Create `src/components/editor/MarkdownOutline.tsx`, `src/components/editor/MarkdownPreview.tsx`, and `src/components/editor/MarkdownPreview.test.tsx`.
-
-**Interfaces:** `MarkdownPreviewProps` is `{ content: string; initialScrollTop: number; onScrollPositionChange: (scrollTop: number) => void }`. `MarkdownOutline` receives `Heading[]` and `RefObject<HTMLDivElement | null>`.
-
-- [ ] **Step 1: Test component behavior with React/jsdom.** Verify heading-free content omits the outline, current draft changes rerender, Unicode IDs target only this preview container, and outline clicks dispatch `preview-navigation` before scoped `scrollIntoView`.
-- [ ] **Step 2: Implement `MarkdownOutline`.** Render an accessible `nav aria-label="Markdown outline"`, hide it below the existing `md` breakpoint, indent by heading level, and use `CSS.escape` with the preview container ref. Buttons need keyboard focus styling.
-- [ ] **Step 3: Implement `MarkdownPreview`.** Memoize `renderMarkdown(content)`, render the outline only when headings exist, place the HTML in one `.md-preview` article via `dangerouslySetInnerHTML`, attach a scroll-container ref, and invoke `restorePreviewScroll` whenever rendered HTML changes. Keep preview scrolling independent from CodeMirror scrolling.
-- [ ] **Step 4: Run focused component/scroll tests and `npm run typecheck`.** Confirm `dangerouslySetInnerHTML` still appears exactly once under `src/`. Commit `feat(editor): add Markdown preview and heading navigation`.
-
-## Authoritative revised Task 14: Preserve the editor session while wiring the toggle
-
-**Files:** Modify `src/components/editor/EditorCanvas.tsx`, `src/components/editor/MarkdownEditor.tsx`, `src/app/page.tsx`; create `src/components/editor/editor-scroll.ts` and `src/components/editor/editor-scroll.test.ts`; migrate `e2e/notes.spec.ts`.
-
-**Interfaces:** Extend `MarkdownEditorHandle` with `getScrollPosition(): { top: number; left: number }` and `restoreScrollPosition(position, afterMeasure?): void`. `EditorCanvas` owns `previewMode`, `previewScrollTopRef`, and separate outer/CodeMirror edit scroll snapshots.
-
-- [ ] **Step 1: Test `restoreEditorScroll`.** Use `EditorView.requestMeasure` with a controlled read/write cycle and assert both scroll axes are restored after measurement. Commit no implementation before the test fails.
+Replace the existing note-sync and textarea auto-resize effects (the full region from `// Sync content when switching notes` through the second effect) with:
 
 ```ts
-const view = new EditorView({ parent: document.body, state: EditorState.create({ doc: 'text' }) });
-let queued: Parameters<EditorView['requestMeasure']>[0] | undefined;
-view.requestMeasure = request => { queued = request; };
-restoreEditorScroll(view, { top: 200, left: 30 });
-const measured = queued!.read(view);
-queued!.write?.(measured, view);
-expect(view.scrollDOM.scrollTop).toBe(200);
-expect(view.scrollDOM.scrollLeft).toBe(30);
+useEffect(() => {
+  if (syncedNoteIdRef.current === note.id) return;
+  syncedNoteIdRef.current = note.id;
+  setContent(note.content);
+  contentRef.current = note.content;
+  setLocalTitle(note.title);
+  setSaveState('IDLE');
+  setPreviewMode(false);
+  previewScrollTopRef.current = 0;
+  editScrollRef.current = null;
+  if (autoFocus) onAutoFocusHandled?.();
+}, [note.id, note.title, note.content, autoFocus, onAutoFocusHandled]);
+useEffect(() => () => { syncedNoteIdRef.current = null; }, []);
 ```
-- [ ] **Step 2: Implement editor scroll access.** Add `editor-scroll.ts` using `view.requestMeasure({ read: () => position, write: saved => { view.scrollDOM.scrollTop = saved.top; view.scrollDOM.scrollLeft = saved.left; afterMeasure?.(); } })`. Expose the helper methods through `MarkdownEditorHandle`; set `viewRef.current = null` before `view.destroy()` so delayed image completion cannot dispatch into a destroyed editor.
-- [ ] **Step 3: Key the editor boundary by note ID.** Add `key={activeNote.id}` to the `EditorCanvas` element in `src/app/page.tsx`. This ensures a direct ready-note replacement gets a fresh local state and CodeMirror document. Keep the existing same-note image guard and invalidate it on editor-session cleanup.
-- [ ] **Step 4: Replace the mode toggle.** Remove the textarea branch, `NoteMode` UI checks, `textareaRef`, auto-resize effect, and `handleSwitchMode`. Keep `MarkdownEditor` mounted in a stable `hidden inert aria-hidden` wrapper while Preview is visible; show `MarkdownPreview` alongside it. Capture outer and CodeMirror scroll positions before entering Preview, restore them after returning through `useLayoutEffect`, reset preview offset and `previewMode` on note ID changes, and never cancel pending autosave on a view toggle. Use Eye/Pencil controls with `aria-pressed`; footer displays `EDIT`/`PREVIEW`; toolbar renders only in Edit.
-- [ ] **Step 5: Migrate and extend browser tests.** Update existing `e2e/notes.spec.ts` scenarios from PLAIN/RICH and textarea selectors to CodeMirror/Edit/Preview. Add assertions for latest unsaved content in Preview, retained selection/undo/redo/editor scroll after round-trip, first preview at top and later preview offset restoration, outline navigation, shorter-content clamping, note-switch/reset behavior, image paste completion while previewing, hidden editor keyboard isolation, and responsive outline visibility. Do not claim this passes until run against a live disposable test database.
-- [ ] **Step 6: Run `npm test -- src/components/editor`, `npm run typecheck`, and `npm run lint`; commit** `feat(editor): retain writing session across Markdown preview`.
 
-## Authoritative revised Task 15: Whole-branch verification and visual acceptance
+The cleanup invalidates a pending image paste when its note closes. Keep the same-note identity guard in `handlePasteImage`; remove only `if (currentModeRef.current !== NoteMode.RICH) return;`. A same-note paste can now finish in Preview. Do not clear autosave in `togglePreview`.
 
-**Files:** none unless verification exposes a required fix; any fix gets its own commit.
+- [ ] **Step 6: Delete `handleSwitchMode` in full and replace both mode buttons with this JSX.** The surrounding mobile/desktop visibility containers remain. Use the same accessible label in both; only one is visible per viewport.
 
-- [ ] **Step 1: Run automated checks.** Run `npm run typecheck && npm run lint && npm test`; run `npm run test:e2e` only with the disposable database and `APP_PASSWORD` described in `e2e/README.md`. Confirm `rg -n "dangerouslySetInnerHTML" src` returns exactly the Preview boundary, and `rg -n "NoteMode|textareaRef|handleSwitchMode" src/components/editor/EditorCanvas.tsx` returns no matches.
-- [ ] **Step 2: Run browser visual checks through the existing browser workflow.** At mobile (<768px), tablet (768–1023px), and desktop (≥1024px), verify Edit/Preview controls, hidden toolbar, responsive outline, no horizontal overflow, marker-only list color, amber inline/block code, continuous code-block backgrounds, links containing code, and selection/search contrast. Check a 30-line code block before deciding whether the shared amber token needs adjustment.
+```tsx
+<button type="button" onClick={togglePreview}
+  aria-label={previewMode ? 'Edit' : 'Preview'} aria-pressed={previewMode}
+  title={previewMode ? 'Edit' : 'Preview'}
+  className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-700">
+  {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+  <span className="hidden md:inline">{previewMode ? 'Edit' : 'Preview'}</span>
+</button>
+```
+
+Change the toolbar condition from `note.mode === NoteMode.RICH` to `!previewMode`. Replace the complete existing Editor Body wrapper and both editor branches with:
+
+```tsx
+<div className="relative min-h-0 flex-1 overflow-hidden">
+  <div ref={editorScrollRef} data-testid="markdown-editor-scroll"
+    hidden={previewMode} inert={previewMode} aria-hidden={previewMode}
+    className="md-editor-surface h-full overflow-auto p-6 font-mono md:px-10 lg:px-20">
+    <MarkdownEditor key={note.id} ref={markdownEditorRef} value={content}
+      onChange={val => {
+        setContent(val);
+        contentRef.current = val;
+        triggerSave({ content: val });
+      }}
+      onPasteText={handlePasteText} onPasteImage={handlePasteImage}
+      autoFocus={autoFocus} searchQuery={searchQuery} />
+  </div>
+  {previewMode && <MarkdownPreview content={content}
+    initialScrollTop={previewScrollTopRef.current}
+    onScrollPositionChange={rememberPreviewScroll} />}
+</div>
+```
+
+Replace the footer span containing `{note.mode}` with:
+
+```tsx
+<span className="text-zinc-500">{previewMode ? 'PREVIEW' : 'EDIT'}</span>
+```
+
+No `NoteMode` checks remain in this component. Existing `note.mode` fields in save payloads remain unchanged. Keep source exports and plain-text projection behavior intact.
+
+- [ ] **Step 7: Migrate the existing CRUD and paste browser tests to CodeMirror.** Add this helper near the imports in `e2e/notes.spec.ts`, replace each `getByPlaceholder('Start typing plain text...')` fill/assertion with it or `.cm-content`, delete the PLAIN/RICH switch test, and keep the HTML/plain-text paste security assertion against the single editor.
+
+```ts
+async function setMarkdown(page: Page, markdown: string) {
+  const editor = page.locator('.cm-content');
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.insertText(markdown);
+}
+
+// CRUD persistence assertion after reload/reselection:
+await expect(page.locator('.cm-content')).toContainText(content);
+
+// Paste assertion no longer switches mode first:
+const cmContent = page.locator('.cm-content');
+await cmContent.click();
+await cmContent.evaluate((element) => {
+  const clipboard = new DataTransfer();
+  clipboard.setData('text/html', '<h2>Hello</h2><script>window.__xss = true;</script>');
+  clipboard.setData('text/plain', '## Hello (plain text)');
+  element.dispatchEvent(new ClipboardEvent('paste', {
+    clipboardData: clipboard, bubbles: true, cancelable: true,
+  }));
+});
+```
+
+Import `type Page` from `@playwright/test`. Use `ControlOrMeta+A`, `ControlOrMeta+Z`, and `ControlOrMeta+Shift+Z` in test bodies instead of branching on Node's platform.
+
+- [ ] **Step 8: Add browser coverage for the retained session and independent Preview position.** Add the following tests to `e2e/notes.spec.ts`; use enough repeated paragraphs to make both surfaces scroll. These assertions cover the current in-memory draft, selection/history retention, editor scrolling, first/subsequent preview offsets, outline navigation, shortening clamp, note-switch reset, and hidden-editor keyboard isolation.
+
+```ts
+test('previews the latest draft and retains selection, history, and both scroll positions', async ({ page }) => {
+  await createNote(page);
+  const markdown = ['# Start', ...Array.from({ length: 80 }, (_, i) => `line ${i}`), '# End'].join('\n\n');
+  await setMarkdown(page, markdown);
+  const editor = page.locator('.cm-content');
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.insertText(' draft');
+  await page.keyboard.down('Shift'); await page.keyboard.press('ArrowLeft'); await page.keyboard.up('Shift');
+  const outerScroll = page.getByTestId('markdown-editor-scroll');
+  await outerScroll.evaluate(element => { element.scrollTop = 40; });
+  await editor.evaluate(element => { element.closest('.cm-scroller')!.scrollTop = 160; });
+  const before = await editor.evaluate(element => ({
+    scrollTop: element.closest('.cm-scroller')!.scrollTop,
+  }));
+  const outerBefore = await outerScroll.evaluate(element => element.scrollTop);
+  expect(before.scrollTop).toBeGreaterThan(0);
+  expect(outerBefore).toBeGreaterThan(0);
+  const selected = await page.evaluate(() => getSelection()?.toString());
+
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect(page.getByRole('article')).toContainText('draft');
+  await expect(page.getByTestId('markdown-editor-scroll')).toBeHidden();
+  await page.keyboard.insertText('must-not-enter-editor');
+  await expect(page.getByRole('article')).not.toContainText('must-not-enter-editor');
+  const preview = page.getByTestId('markdown-preview-scroll');
+  await expect(preview).toHaveJSProperty('scrollTop', 0);
+  await preview.evaluate(element => { element.scrollTop = 240; element.dispatchEvent(new Event('scroll')); });
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await editor.focus();
+  await expect(editor).toContainText('draft');
+  await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe(selected);
+  await expect.poll(() => editor.evaluate(element => element.closest('.cm-scroller')!.scrollTop))
+    .toBe(before.scrollTop);
+  await expect.poll(() => outerScroll.evaluate(element => element.scrollTop)).toBe(outerBefore);
+  await page.keyboard.press('ControlOrMeta+Z'); await expect(editor).not.toContainText('draft');
+  await page.keyboard.press('ControlOrMeta+Shift+Z'); await expect(editor).toContainText('draft');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => preview.evaluate(element => element.scrollTop)).toBe(240);
+  await page.getByRole('button', { name: 'End draft' }).click();
+  await expect.poll(() => preview.evaluate(element => element.scrollTop)).toBeGreaterThan(240);
+
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await setMarkdown(page, '# Short');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect.poll(() => preview.evaluate(element => element.scrollTop)).toBe(0);
+  await deleteActiveNote(page);
+});
+
+test('opens another note and reloads in Edit with Preview reset to the top', async ({ page }) => {
+  await createNote(page); const first = uniqueName('Preview first');
+  await page.getByPlaceholder('Untitled').fill(first);
+  const firstContent = '# First\n\n' + 'body\n\n'.repeat(80);
+  const firstSaved = waitForContentSave(page, firstContent);
+  await setMarkdown(page, firstContent); await firstSaved;
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await page.getByTestId('markdown-preview-scroll').evaluate(element => {
+    element.scrollTop = 300; element.dispatchEvent(new Event('scroll'));
+  });
+  await createNote(page); const second = uniqueName('Preview second');
+  await page.getByPlaceholder('Untitled').fill(second);
+  const secondSaved = waitForContentSave(page, '# Second');
+  await setMarkdown(page, '# Second'); await secondSaved;
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: startsWith(first) }).click();
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect(page.getByTestId('markdown-preview-scroll')).toHaveJSProperty('scrollTop', 0);
+  await page.reload(); await page.getByRole('button', { name: startsWith(first) }).click();
+  await expect(page.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'false');
+  await deleteActiveNote(page);
+  await page.getByRole('button', { name: startsWith(second) }).click();
+  await deleteActiveNote(page);
+});
+```
+
+- [ ] **Step 9: Add real image lifecycle and responsive outline browser tests.** Paste an actual PNG `File`, enter Preview immediately, wait for its data URL image to load, and verify the Markdown remains after returning to Edit. Test the outline at 767px and 768px so the `md` boundary is explicit.
+
+```ts
+test('finishes an in-flight image paste while Preview is visible', async ({ page }) => {
+  await createNote(page);
+  await page.evaluate(() => {
+    const NativeImage = window.Image;
+    let release: (() => void) | undefined;
+    Object.defineProperty(window, 'Image', { configurable: true, value: function Image() {
+      const image = new NativeImage();
+      Object.defineProperty(image, 'src', { configurable: true, set(value: string) {
+        release = () => { image.setAttribute('src', value); };
+      } });
+      return image;
+    } });
+    (window as typeof window & { __releaseImageDecode?: () => void }).__releaseImageDecode =
+      () => release?.();
+  });
+  await page.locator('.cm-content').click();
+  await page.locator('.cm-content').evaluate((element) => {
+    const bytes = Uint8Array.from(atob(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    ), character => character.charCodeAt(0));
+    const clipboard = new DataTransfer();
+    clipboard.items.add(new File([bytes], 'pixel.png', { type: 'image/png' }));
+    element.dispatchEvent(new ClipboardEvent('paste', {
+      clipboardData: clipboard, bubbles: true, cancelable: true,
+    }));
+  });
+  await page.getByRole('button', { name: 'Preview' }).click();
+  await expect(page.getByRole('article').locator('img')).toHaveCount(0);
+  await page.evaluate(() => {
+    (window as typeof window & { __releaseImageDecode?: () => void }).__releaseImageDecode?.();
+  });
+  const image = page.getByRole('article').locator('img[alt="pixel.png"]');
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).complete)).toBe(true);
+  await page.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.locator('.cm-content')).toContainText('![pixel.png](data:image/webp');
+  await deleteActiveNote(page);
+});
+
+test('shows the outline from the md breakpoint and never overflows horizontally', async ({ page }) => {
+  await createNote(page); await setMarkdown(page, '# One\n\n## Two\n\nbody');
+  await page.getByRole('button', { name: 'Preview' }).click();
+  const outline = page.getByRole('navigation', { name: 'Markdown outline' });
+  await page.setViewportSize({ width: 767, height: 800 }); await expect(outline).toBeHidden();
+  await page.setViewportSize({ width: 768, height: 800 }); await expect(outline).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await deleteActiveNote(page);
+});
+```
+
+- [ ] **Step 10: Update the operational docs to match the shipped contract.** Replace the Scope paragraph in `e2e/README.md` and the opening overview plus module list in `.claude/rules/markdown.md` with these exact statements; retain the existing toolbar and `Note.content` guidance below them.
+
+```md
+<!-- e2e/README.md Scope -->
+Covers login and note CRUD, the single CodeMirror Markdown editor, Edit/Preview
+round-trips, editor and preview state retention, outline navigation, image-paste
+completion, responsive outline behavior, plain-text paste handling, folder
+workflows, and search. Run stateful scenarios only against the disposable
+database described above.
+
+<!-- .claude/rules/markdown.md Overview / module addition -->
+`Note.content` is canonical Markdown for every note. `Note.mode` is a frozen
+compatibility field carried through saves unchanged; it no longer selects an
+editor. Edit always uses CodeMirror. Preview renders escaped HTML through the
+single `MarkdownPreview.tsx` boundary; raw note HTML is displayed as text.
+
+- `render-html.ts` — parser-backed, GFM-aware Markdown-to-HTML rendering plus
+  semantic heading extraction. It is the only source permitted to supply HTML
+  to `MarkdownPreview.tsx`.
+
+Replace the final sentence under `## Note.content invariant` with:
+
+`mode` is a frozen compatibility field carried through saves unchanged; it no
+longer selects an editor or changes how `content` is interpreted.
+```
+
+- [ ] **Step 11: Run focused checks.** Run `npm test -- src/components/editor`, `npm run lint`, `npm run format:check`, and `npm run typecheck`. Expected: all pass. Then run `APP_PASSWORD="test-password" npm run test:e2e -- e2e/notes.spec.ts` only while the app is connected to the disposable database from `e2e/README.md`. Expected: all notes scenarios pass. These Playwright assertions establish actual browser scroll, image, keyboard, and responsive behavior; do not substitute jsdom results.
+- [ ] **Step 12: Commit.** Run `git add src/components/editor/EditorCanvas.tsx src/components/editor/MarkdownEditor.tsx src/components/editor/editor-scroll.ts src/components/editor/editor-scroll.test.ts src/app/page.tsx e2e/notes.spec.ts e2e/README.md .claude/rules/markdown.md` then `git commit -m "feat(editor): retain session across markdown preview"`.
+
+## Task 15: Whole-branch verification and visual acceptance
+
+**Files:** none unless verification exposes a required fix; any fix gets its own atomic commit using `type(scope): lowercase description` with at most 12 words.
+
+- [ ] **Step 1: Run automated checks.** Run `npm run lint && npm run format:check && npm run typecheck && npm test`. Start the app with the disposable database and `APP_PASSWORD` commands copied from `e2e/README.md`, then run `APP_PASSWORD="test-password" npm run test:e2e`; expect every Playwright project to pass. Confirm `rg -n "dangerouslySetInnerHTML" src` returns exactly one match in `src/components/editor/MarkdownPreview.tsx`, and `rg -n "NoteMode|textareaRef|handleSwitchMode|Start typing plain text|PLAIN|RICH" src/components/editor/EditorCanvas.tsx e2e/notes.spec.ts` returns no matches.
+- [ ] **Step 2: Create one disposable acceptance note and run browser visual checks through the existing browser workflow.** Use this exact content, then inspect it at 390×844, 768×1024, and 1280×800. Verify Edit/Preview controls, hidden toolbar, outline hidden at 390 and visible at 768/1280, no page-level horizontal overflow, heading hierarchy/spacing, italic quote plus left border in both views, marker-only indigo list styling, amber inline/block code, continuous code-block backgrounds including blank lines, indigo underline around linked amber code, and table borders. Select the search hit `needle` and confirm selection foreground/background wins over the search colors. Record screenshots at all three widths.
+
+````md
+# Heading one
+## Heading two
+### Heading three
+
+> Quoted *secondary* text
+
+- neutral prose with [`linkedCode()`](https://example.com) and needle
+  1. nested ordered prose
+
+| Name | Value |
+| --- | --- |
+| alpha | `inline` |
+
+```text
+01 amber
+02 amber
+
+04 amber
+05 amber
+06 amber
+07 amber
+08 amber
+09 amber
+10 amber
+11 amber
+12 amber
+13 amber
+14 amber
+15 amber
+16 amber
+17 amber
+18 amber
+19 amber
+20 amber
+21 amber
+22 amber
+23 amber
+24 amber
+25 amber
+26 amber
+27 amber
+28 amber
+29 amber
+30 amber
+```
+````
 - [ ] **Step 3: Verify state behavior manually.** Confirm first Preview starts at top; subsequent visits restore preview offset; outline navigation updates it; image loading does not erase it; shorter content clamps it; editing position/selection/undo history remains independent; switching notes and reloading reset both view state and preview offset. Confirm content, exports, clipboard, and saved `Note.mode` remain unchanged.
-- [ ] **Step 4: Commit only surfaced fixes and update the progress ledger.** Record each clean task as required by Subagent-Driven Development, then dispatch the final whole-branch review with the merge-base review package.
+- [ ] **Step 4: Commit only surfaced fixes and update the progress ledger.** For each fix, rerun the focused failing check plus `npm run lint`, `npm run format:check`, and `npm run typecheck`, then create an atomic conventional commit such as `fix(editor): preserve preview offset after image load`. Record each clean task as required by Subagent-Driven Development, then dispatch the final whole-branch review with the merge-base review package.
