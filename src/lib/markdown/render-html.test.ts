@@ -296,3 +296,58 @@ describe('renderMarkdown: GFM tables (terminal-table.ts paste contract)', () => 
     );
   });
 });
+
+describe('renderMarkdown: security boundary', () => {
+  it('renders a <script> block as escaped text, never as markup', () => {
+    const { html } = renderMarkdown('<script>alert(1)</script>');
+    expect(html).toBe('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>');
+  });
+
+  it('renders inline raw HTML tags as escaped text', () => {
+    const { html } = renderMarkdown('<b>bold html</b>');
+    expect(html).toBe('<p>&lt;b&gt;bold html&lt;/b&gt;</p>');
+    expect(html).not.toContain('<b>');
+  });
+
+  it('escapes HTML-significant characters inside inline and fenced code', () => {
+    expect(renderMarkdown('`<tag> & value`').html).toBe(
+      '<p><code>&lt;tag&gt; &amp; value</code></p>',
+    );
+    expect(renderMarkdown('```html\n<script>&alert</script>\n```').html).toBe(
+      '<pre><code>\n&lt;script&gt;&amp;alert&lt;/script&gt;\n</code></pre>',
+    );
+  });
+
+  it('keeps an unknown named entity as escaped literal source', () => {
+    expect(renderMarkdown('&unknown;').html).toBe('<p>&amp;unknown;</p>');
+  });
+
+  it('never lets a javascript: URL reach an href or src attribute, in any position', () => {
+    // Checking for the bare substring "javascript:" would be too strong a
+    // claim: 'auto <javascript:alert(1)> link' safely degrades to
+    // '<p>auto javascript:alert(1) link</p>' — the text is visible and
+    // harmless, it's just not inside an attribute. What must never happen
+    // is that substring appearing as the value of an href or src.
+    const cases = [
+      '[click](javascript:alert(1))',
+      '![img](javascript:alert(1))',
+      'auto <javascript:alert(1)> link',
+    ];
+    for (const md of cases) {
+      const { html } = renderMarkdown(md);
+      expect(html).not.toMatch(/(?:href|src)\s*=\s*["']javascript:/i);
+    }
+  });
+
+  it('rejects the bracketed-destination + control-character composite bypass', () => {
+    // "<java\tscript:alert(1)>" is a syntactically valid CommonMark
+    // bracketed link destination (Task 5's angle-bracket form allows
+    // embedded whitespace) whose scheme our regex only fails to recognize
+    // because of the embedded tab. This is the concrete case Task 1's
+    // control-character rejection and Task 5's bracket-stripping have to
+    // compose correctly to close — see both tasks' comments.
+    const { html } = renderMarkdown('[x](<java\tscript:alert(1)>)');
+    expect(html).not.toMatch(/href\s*=\s*["']java/i);
+  });
+});
