@@ -72,7 +72,66 @@ export interface RenderResult {
   headings: Heading[];
 }
 
-const MARKER_NODES = new Set<string>([]);
+const MARKER_NODES = new Set<string>([
+  'HeaderMark',
+  'EmphasisMark',
+  'StrikethroughMark',
+  'CodeMark',
+  'CodeInfo',
+]);
+
+function decodeEscape(nodeSource: string): string {
+  // nodeSource is the full "\\X" escape sequence — the visible character is
+  // everything after the backslash.
+  return nodeSource.slice(1);
+}
+
+// A curated subset of commonly-typed named entities — not the full HTML5
+// table (~2000 entries). Numeric entities (&#123; / &#x7B;) are fully
+// supported below regardless of this map; an unmapped named entity (e.g. an
+// obscure one not in this list) falls back to its literal escaped source
+// text rather than silently producing something wrong.
+const ENTITY_MAP: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0',
+  copy: '\u00a9',
+  reg: '\u00ae',
+  trade: '\u2122',
+  mdash: '\u2014',
+  ndash: '\u2013',
+  hellip: '\u2026',
+  ldquo: '\u201c',
+  rdquo: '\u201d',
+  lsquo: '\u2018',
+  rsquo: '\u2019',
+  deg: '\u00b0',
+  euro: '\u20ac',
+  pound: '\u00a3',
+  cent: '\u00a2',
+  yen: '\u00a5',
+};
+
+function decodeEntity(nodeSource: string): string {
+  // nodeSource is "&name;", "&#123;", or "&#x7B;".
+  const body = nodeSource.slice(1, -1);
+  if (body.startsWith('#')) {
+    const hex = /^#x/i.test(body);
+    const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+    if (
+      !Number.isInteger(code) ||
+      code <= 0 ||
+      code > 0x10ffff ||
+      (code >= 0xd800 && code <= 0xdfff)
+    )
+      return '\uFFFD';
+    return String.fromCodePoint(code);
+  }
+  return Object.hasOwn(ENTITY_MAP, body) ? ENTITY_MAP[body] : nodeSource;
+}
 
 export function renderMarkdown(content: string): RenderResult {
   const source = content;
@@ -102,6 +161,25 @@ export function renderMarkdown(content: string): RenderResult {
         return renderChildren(node);
       case 'Paragraph':
         return `<p>${renderChildren(node)}</p>`;
+      case 'Emphasis':
+        return `<em>${renderChildren(node)}</em>`;
+      case 'StrongEmphasis':
+        return `<strong>${renderChildren(node)}</strong>`;
+      case 'Strikethrough':
+        return `<del>${renderChildren(node)}</del>`;
+      case 'InlineCode':
+        return `<code>${renderChildren(node)}</code>`;
+      case 'HardBreak':
+        return '<br />';
+      case 'Escape':
+        return escapeHtml(decodeEscape(source.slice(node.from, node.to)));
+      case 'Entity':
+        return escapeHtml(decodeEntity(source.slice(node.from, node.to)));
+      case 'FencedCode':
+      case 'CodeBlock':
+        return `<pre><code>${renderChildren(node)}</code></pre>`;
+      case 'CodeText':
+        return escapeHtml(source.slice(node.from, node.to));
       default:
         return escapeHtml(source.slice(node.from, node.to));
     }

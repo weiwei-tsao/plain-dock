@@ -115,3 +115,40 @@ describe('_assignHeadingId', () => {
     expect(_assignHeadingId('!!!', seen)).toBe('section-2');
   });
 });
+
+describe('renderMarkdown: inline formatting and code', () => {
+  it('renders emphasis, strong, and strikethrough', () => {
+    expect(renderMarkdown('Hello **world**').html).toBe('<p>Hello <strong>world</strong></p>');
+    expect(renderMarkdown('*em*').html).toBe('<p><em>em</em></p>');
+    expect(renderMarkdown('~~strike~~').html).toBe('<p><del>strike</del></p>');
+  });
+
+  it('renders inline code without interpreting its contents as markdown', () => {
+    expect(renderMarkdown('`inline code`').html).toBe('<p><code>inline code</code></p>');
+  });
+
+  it('renders a fenced code block, escaped, with no syntax highlighting', () => {
+    const { html } = renderMarkdown('```js\nconst x = 1;\nconst y = 2;\n```');
+    expect(html).toBe('<pre><code>\nconst x = 1;\nconst y = 2;\n</code></pre>');
+  });
+
+  it('decodes a backslash-escaped character to its literal form', () => {
+    expect(renderMarkdown('\\* not emphasis').html).toBe('<p>* not emphasis</p>');
+  });
+
+  it('decodes a named HTML entity and re-escapes it for safe output', () => {
+    expect(renderMarkdown('&amp; entity').html).toBe('<p>&amp; entity</p>');
+  });
+
+  it('replaces invalid Unicode scalar values without crashing Preview', () => {
+    for (const entity of ['&#9999999;', '&#x110000;', '&#0;', '&#xD800;']) {
+      expect(renderMarkdown(entity).html).toBe('<p>\uFFFD</p>');
+    }
+    expect(renderMarkdown('&#x1F600; &#65;').html).toBe('<p>😀 A</p>');
+  });
+
+  it('renders a hard line break', () => {
+    // HardBreak's source range includes the newline; render it exactly once as <br />.
+    expect(renderMarkdown('line one  \nline two').html).toBe('<p>line one<br />line two</p>');
+  });
+});
