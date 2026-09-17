@@ -38,6 +38,14 @@ This approach keeps CodeMirror's existing state together. Destroying and reconst
 
 Switching notes still starts in Edit with a fresh editor for the selected note. The toggle does not convert content, change `Note.mode`, or cancel pending autosave. A pending image paste for the same note can complete against the retained editor and update Preview; the existing note-identity guard must still prevent insertion into a different note.
 
+### Preview reading position
+
+**Option B, confirmed 2026-09-16:** The first Preview of the currently open note starts at the top. Subsequent visits to Preview restore its last reading scroll position, independently of the editor's scroll position and cursor. Both manual scrolling and outline navigation update that reading position. Returning to Edit and changing the draft does not reset it; if the new rendered document is shorter, clamp the saved offset to the available scroll range. This is scroll-offset restoration, not semantic anchoring to a paragraph after edits.
+
+The reading position lives only in memory for the currently open note. Switching away from that note or reloading the page clears it, so the next first Preview starts at the top. No database or browser-storage persistence and no automatic jump to the editor's current section are required.
+
+`EditorCanvas` retains the preview scroll offset across `MarkdownPreview` mounts and resets it on note changes. `MarkdownPreview` reports scroll changes and restores the supplied offset after rendering and layout; image loading must not cause a premature clamp to discard a restorable position. Preview remains responsible for its own DOM and scrolling, while `EditorCanvas` holds the per-note-open value.
+
 ## `Note.mode`: frozen, not removed
 
 `EditorCanvas`'s `triggerSave()` already does `const mode = updates.mode ?? note.mode;` — it never needs a caller to supply `mode` explicitly. Removing `handleSwitchMode()` and its two toggle buttons is sufficient to freeze the field: every save simply carries the note's existing `mode` forward unchanged. No changes needed to `schema.prisma`, `types.ts`, API routes, or `serialize.ts`. `NoteMode` stays defined; a future migration (if ever needed) is a separate, independently-scoped change.
@@ -79,7 +87,7 @@ EditorCanvas
 - Delete the `<textarea>` branch, `textareaRef`, the auto-resize effect, the PLAIN paste-image handler branch, and every `note.mode === NoteMode.PLAIN/RICH` conditional except the ones needed to freeze `mode` on save.
 - Delete `handleSwitchMode` and both mode-switch buttons (mobile + desktop). Replace with a Preview/Edit toggle (`Eye`/`Pencil` icons from `lucide-react`) that flips local `previewMode` — no `persistChange` call, since this is not saved state.
 - `RichToolbar` render condition changes from `note.mode === NoteMode.RICH` to `!previewMode`.
-- Editor body keeps `<MarkdownEditor>` mounted in a stable position with the current note's key. Its wrapper is hidden in Preview; `<MarkdownPreview content={content} />` is shown alongside it only in Preview. Toggling must not replace or re-key the editor or its scroll container.
+- Editor body keeps `<MarkdownEditor>` mounted in a stable position with the current note's key. Its wrapper is hidden in Preview; `<MarkdownPreview>` is shown alongside it only in Preview, receiving current `content`, the saved preview scroll offset, and a scroll-position callback. Toggling must not replace or re-key the editor or its scroll container.
 - Footer badge that currently shows `{note.mode}` switches to reflect `previewMode` (`EDIT` / `PREVIEW`) purely as a display label — word/char counts are unaffected (already computed from `content` via `markdownToPlainText`, independent of view).
 
 `EditorCanvas` does **not** know about HTML, headings, slugs, or GFM — it controls visibility and editing-position restoration, and passes `content` through. `MarkdownPreview` owns parsing:
@@ -94,6 +102,8 @@ const { html, headings } = useMemo(() => renderMarkdown(content), [content]);
 ```ts
 interface MarkdownPreviewProps {
   content: string;
+  initialScrollTop: number;
+  onScrollPositionChange: (scrollTop: number) => void;
 }
 ```
 
@@ -234,6 +244,9 @@ Manual check after implementation: paste a terminal table and a screenshot into 
 Browser acceptance checks for the writing session:
 - Type a distinctive change and immediately open Preview, before the autosave debounce fires: Preview shows the latest draft, and saving still completes.
 - In a long note, select text away from the top and record the editor's scroll position. Open Preview, scroll elsewhere or follow an outline entry, then return to Edit: the selection and editing scroll position are preserved. Repeat the round-trip.
+- First Preview starts at the top. Scroll down, return to Edit, and reopen Preview: restore the last preview scroll offset. Repeat after navigating with the outline and with images above the saved position; preview and editing offsets remain independent.
+- Edit the draft between preview visits: the latest content renders and the saved preview offset is restored, clamped to the new maximum if the note became shorter.
+- Switch away and reopen the note, or reload the page: it opens in Edit and its next Preview starts at the top.
 - Undo an edit made before entering Preview, then redo it: both operations still work after returning to Edit.
 - Keyboard navigation in Preview cannot enter the hidden editor. Returning to Edit exposes the retained editor normally.
 - Switch to another note while previewing: it opens in Edit, with its own content and no selection or undo history inherited from the previous note.
