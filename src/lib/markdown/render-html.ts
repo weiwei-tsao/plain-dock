@@ -81,6 +81,9 @@ const MARKER_NODES = new Set<string>([
   'LinkMark',
   'LinkLabel',
   'LinkTitle',
+  'ListMark',
+  'QuoteMark',
+  'TaskMarker',
 ]);
 
 function decodeEscape(nodeSource: string): string {
@@ -238,6 +241,29 @@ export function renderMarkdown(content: string): RenderResult {
         return renderChildren(node);
       case 'Paragraph':
         return `<p>${renderChildren(node)}</p>`;
+      case 'Blockquote':
+        return `<blockquote>${renderChildren(node)}</blockquote>`;
+      case 'BulletList':
+        return `<ul>${renderChildren(node)}</ul>`;
+      case 'OrderedList': {
+        const marker = node.getChild('ListItem')?.getChild('ListMark');
+        const start = marker ? parseInt(source.slice(marker.from, marker.to), 10) : 1;
+        const attribute = start === 1 ? '' : ` start="${escapeAttribute(String(start))}"`;
+        return `<ol${attribute}>${renderChildren(node)}</ol>`;
+      }
+      case 'ListItem':
+        return `<li>${renderChildren(node)}</li>`;
+      // A GFM task item's checkbox is nested one level inside its ListItem
+      // (ListItem > ListMark, Task), not a sibling of ListItem — so Task
+      // renders only the checkbox + its own content, and lets the
+      // surrounding ListItem case supply the <li> wrapper.
+      case 'Task': {
+        const marker = node.getChild('TaskMarker');
+        const checked = marker ? /x/i.test(source.slice(marker.from, marker.to)) : false;
+        return `<input type="checkbox" disabled${checked ? ' checked' : ''} />${renderChildren(node)}`;
+      }
+      case 'HorizontalRule':
+        return '<hr />';
       case 'ATXHeading1':
         return renderHeading(node, 1);
       case 'ATXHeading2':

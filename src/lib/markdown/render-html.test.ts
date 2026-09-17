@@ -244,3 +244,39 @@ describe('renderMarkdown: links and images', () => {
     expect(html).toBe('<p>visit www.example.com today</p>');
   });
 });
+
+describe('renderMarkdown: blockquotes, lists, task lists, hr', () => {
+  it('renders a blockquote', () => {
+    const { html } = renderMarkdown('> quote');
+    expect(html).toBe('<blockquote> <p>quote</p></blockquote>');
+  });
+
+  it('renders a bullet list', () => {
+    const { html } = renderMarkdown('- a\n- b');
+    expect(html).toBe('<ul><li> <p>a</p></li>\n<li> <p>b</p></li></ul>');
+  });
+
+  it('renders an ordered list', () => {
+    const { html } = renderMarkdown('1. a\n2. b');
+    expect(html).toBe('<ol><li> <p>a</p></li>\n<li> <p>b</p></li></ol>');
+  });
+
+  it('preserves non-default ordered-list start numbers, including zero', () => {
+    expect(renderMarkdown('3. third\n4. fourth').html).toBe(
+      '<ol start="3"><li> <p>third</p></li>\n<li> <p>fourth</p></li></ol>',
+    );
+    expect(renderMarkdown('0. zero').html).toBe('<ol start="0"><li> <p>zero</p></li></ol>');
+  });
+
+  it('renders a GFM task list with checked state', () => {
+    const { html } = renderMarkdown('- [ ] todo\n- [x] done');
+    expect(html).toBe(
+      '<ul><li> <input type="checkbox" disabled /> todo</li>\n' +
+        '<li> <input type="checkbox" disabled checked /> done</li></ul>',
+    );
+  });
+
+  it('renders a horizontal rule', () => {
+    expect(renderMarkdown('---').html).toBe('<hr />');
+  });
+});
