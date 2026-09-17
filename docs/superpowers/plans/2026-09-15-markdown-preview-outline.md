@@ -2116,8 +2116,9 @@ test('previews the latest draft and retains selection, history, and both scroll 
     scrollTop: element.closest('.cm-scroller')!.scrollTop,
   }));
   const outerBefore = await outerScroll.evaluate(element => element.scrollTop);
-  expect(before.scrollTop).toBeGreaterThan(0);
-  expect(outerBefore).toBeGreaterThan(0);
+  // Layout may put the scroll range in either the wrapper or CodeMirror.
+  // Require a real nonzero editing offset and compare both offsets on return.
+  expect(Math.max(before.scrollTop, outerBefore)).toBeGreaterThan(0);
   const selected = await page.evaluate(() => getSelection()?.toString());
 
   await page.getByRole('button', { name: 'Preview' }).click();
