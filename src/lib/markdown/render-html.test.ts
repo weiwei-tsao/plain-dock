@@ -5,7 +5,26 @@ import {
   isSafeLinkHref,
   isSafeImageSrc,
   _assignHeadingId,
+  renderMarkdown,
 } from './render-html';
+
+describe('renderMarkdown: paragraphs and plain text', () => {
+  it('renders a single paragraph', () => {
+    const { html, headings } = renderMarkdown('Hello world');
+    expect(html).toBe('<p>Hello world</p>');
+    expect(headings).toEqual([]);
+  });
+
+  it('renders two paragraphs as separate <p> tags, preserving the blank-line gap between them', () => {
+    const { html } = renderMarkdown('Hello\n\nWorld');
+    expect(html).toBe('<p>Hello</p>\n\n<p>World</p>');
+  });
+
+  it('escapes a bare < in plain text so it cannot be read as a tag', () => {
+    const { html } = renderMarkdown('a < b');
+    expect(html).toBe('<p>a &lt; b</p>');
+  });
+});
 
 describe('escapeHtml', () => {
   it('escapes &, <, >', () => {
@@ -15,7 +34,9 @@ describe('escapeHtml', () => {
 
 describe('escapeAttribute', () => {
   it('escapes quotes in addition to &, <, >', () => {
-    expect(escapeAttribute(`"quoted" & 'single'`)).toBe('&quot;quoted&quot; &amp; &#39;single&#39;');
+    expect(escapeAttribute(`"quoted" & 'single'`)).toBe(
+      '&quot;quoted&quot; &amp; &#39;single&#39;',
+    );
   });
 });
 
