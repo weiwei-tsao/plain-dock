@@ -46,11 +46,11 @@ The reading position lives only in memory for the currently open note. Switching
 
 `EditorCanvas` retains the preview scroll offset across `MarkdownPreview` mounts and resets it on note changes. `MarkdownPreview` reports scroll changes and restores the supplied offset after rendering and layout; image loading must not cause a premature clamp to discard a restorable position. Preview remains responsible for its own DOM and scrolling, while `EditorCanvas` holds the per-note-open value.
 
-## Inline code editing and color follow-up
+## Inline code editing and approved colors
 
 **Confirmed 2026-09-16:** In Edit, show inline-code backtick delimiters when the cursor is inside the code span or a selection intersects it; hide them otherwise. This is a display-only change: stored Markdown, clipboard source text, exports, and undo history retain the delimiters. Reveal both delimiters so the user can edit the complete syntax. Recognize actual parsed inline-code spans, including multi-backtick delimiters; do not hide literal backticks inside code content or extend this behavior to fenced-code blocks. Preview renders inline code without its Markdown delimiters.
 
-The user also requested a shared editor/preview color specification to distinguish code from lists. The [color guidelines proposal](2026-09-16-markdown-color-guidelines.md) contains exact tokens, contrast calculations, and acceptance cases. Its amber code palette is **proposed, not yet approved**; the existing palette remains the baseline until that choice is confirmed. The implementation scope now includes editor decorations as well as the preview work; revise the plan before execution.
+The user approved the shared [color guidelines](2026-09-16-markdown-color-guidelines.md) on 2026-09-16: **Content is neutral, structure is indigo, literals are amber.** They are binding for editor and preview, including exact tokens, contrast checks, and acceptance cases. Body/list prose uses `#D4D4D8`; headings use `#F4F4F5`; only list markers use indigo. Inline and block code share `md.code-text = #FCD34D`. Keep `md.secondary` and `md.syntax` separate even though both start at `#A1A1AA`. Assess the brightness of large code blocks after implementation rather than preemptively splitting code colors. The implementation scope includes editor decorations and theme changes as well as preview work; revise the plan before execution.
 
 ## `Note.mode`: frozen, not removed
 
@@ -140,7 +140,7 @@ containerRef.current
 
 `@lezer/markdown` is already resolved in the lockfile as a transitive dependency of `@codemirror/lang-markdown` (`@lezer/markdown@1.7.2`). It gets promoted to a direct `dependencies` entry at that same pinned version — no new package is actually installed, just a direct declaration of what's already there.
 
-**GFM is required, not optional.** `terminal-table.ts`'s paste handler already converts pasted tables into real GFM pipe-table Markdown (`| a | b |` / `| --- | --- |`) — that's what gets persisted to `content`. Without the GFM extension, Preview would parse that canonical stored Markdown as plain paragraph pipe-text instead of a table. (`MarkdownEditor.tsx` calls `markdown()` with no config, so Edit currently runs on `commonmarkLanguage` — CommonMark only, no GFM — not the GFM-enabled `markdownLanguage` CodeMirror also ships. Bringing Edit's parser config in line with Preview's is a reasonable follow-up but is out of scope here: it would add `MarkdownEditor.tsx` to this change and pull in GFM/Subscript/Superscript/Emoji highlighting behavior this feature doesn't need.)
+**GFM is required, not optional.** `terminal-table.ts`'s paste handler already converts pasted tables into real GFM pipe-table Markdown (`| a | b |` / `| --- | --- |`) — that's what gets persisted to `content`. Without the GFM extension, Preview would parse that canonical stored Markdown as plain paragraph pipe-text instead of a table. (`MarkdownEditor.tsx` calls `markdown()` with no config, so Edit currently runs on `commonmarkLanguage` — CommonMark only, no GFM — not the GFM-enabled `markdownLanguage` CodeMirror also ships. Changing Edit's parser configuration remains out of scope. That file is now in scope for inline-code decorations and editor lifecycle integration, which do not require adding GFM/Subscript/Superscript/Emoji parsing behavior.)
 
 ```ts
 import { parser, GFM } from '@lezer/markdown';
@@ -230,7 +230,7 @@ Scheme parsing: extract the substring before the first `:` (case-insensitive), t
 
 ## Layout & styling
 
-Rendered Markdown elements (`h1`–`h6`, `p`, `code`, `pre`, `blockquote`, `ul`/`ol`/`li`, `table`/`th`/`td`, `a`, `img`, `hr`, `del`, `strong`, `em`) get a small hand-written `.md-preview` CSS block in `globals.css`, styled from the existing zinc/indigo dark palette (`styling.md`). No `@tailwindcss/typography` or other new dependency — this repo already hand-rolls custom styles outside Tailwind utilities for CodeMirror (`markdown-theme.ts`) and the scrollbar (`globals.css`), so this follows the established pattern rather than introducing a new one.
+Rendered Markdown elements (`h1`–`h6`, `p`, `code`, `pre`, `blockquote`, `ul`/`ol`/`li`, `table`/`th`/`td`, `a`, `img`, `hr`, `del`, `strong`, `em`) get a small hand-written `.md-preview` CSS block in `globals.css`, using the approved zinc/indigo/amber semantic tokens in [the color guidelines](2026-09-16-markdown-color-guidelines.md). CodeMirror and Preview must share their color source; the old purple code and indigo heading colors are superseded. No `@tailwindcss/typography` or other new styling dependency is added. Code containers, spacing, list indentation, and link underlines provide structural cues alongside color.
 
 ## Testing
 
@@ -257,6 +257,7 @@ Browser acceptance checks for the writing session:
 - Keyboard navigation in Preview cannot enter the hidden editor. Returning to Edit exposes the retained editor normally.
 - Switch to another note while previewing: it opens in Edit, with its own content and no selection or undo history inherited from the previous note.
 - Start an image paste, then open Preview before resizing completes: the image appears in the same note's preview and remains present on return to Edit.
+- Run the color guidelines' acceptance cases in both views, including marker-only list coloring, code inside links/lists, selection over search matches, and a 30-line code block for visual assessment of the shared amber token.
 
 ## Files touched
 
@@ -267,3 +268,7 @@ Browser acceptance checks for the writing session:
 5. `src/components/editor/EditorCanvas.tsx` — remove PLAIN branch, mode-switch UI/handler; add `previewMode` state + toggle; retain the editor while previewing and restore editing scroll position.
 6. `src/app/globals.css` — add `.md-preview` styles.
 7. `package.json` — promote `@lezer/markdown` from transitive to direct dependency (pinned `1.7.2`, matching the already-resolved lockfile version).
+8. `src/components/editor/MarkdownEditor.tsx` — integrate display-only inline-code decorations and any visibility/measurement handling needed to preserve editor state.
+9. `src/components/editor/markdown-theme.ts` — adopt the shared semantic colors, marker-only list coloring, code containers, and selection/search precedence.
+
+The revised implementation plan must also locate the shared token source and focused decoration tests before dispatching tasks.

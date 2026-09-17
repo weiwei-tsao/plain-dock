@@ -10,6 +10,8 @@
 
 No light mode — dark theme throughout.
 
+The table below governs application chrome. Markdown content follows the approved [Markdown color contract](../../docs/superpowers/specs/2026-09-16-markdown-color-guidelines.md): **Content is neutral, structure is indigo, literals are amber.** That contract supersedes the former purple code and indigo heading styling; runtime adoption is part of the Markdown Preview work.
+
 | Role | Colors |
 |------|--------|
 | Background | `black`, `zinc-900`, `zinc-900/30`, `zinc-900/50` |
@@ -50,13 +52,19 @@ No light mode — dark theme throughout.
 ## Typography
 
 - Default: `font-sans`
-- PLAIN mode editor: `font-mono text-sm text-zinc-400 leading-relaxed`
+- Markdown editor: `font-mono text-sm leading-relaxed`; body and list prose use `md.text` (`#D4D4D8`, zinc-300).
+- Markdown headings: `md.heading` (`#F4F4F5`, zinc-100), with size, weight, and spacing for hierarchy — not indigo.
 - Note titles: `text-xl font-medium text-zinc-100`
 
 ## CodeMirror Styles
 
-- All CodeMirror editor styles are defined via `EditorView.theme(...)` and `HighlightStyle.define(...)` inside `src/components/editor/markdown-theme.ts` — not inline and not in `globals.css`.
-- Editor content area uses Markdown syntax highlighting with custom color overrides.
-- Inline code: `#a78bfa` (purple) on `#1a1a1a` background.
-- Code blocks: `#0f0f0f` background, monospace.
-- Blockquotes: `border-left: 3px solid #3f3f46`, italic, `#a1a1aa` text.
+- CodeMirror-specific selectors belong in `EditorView.theme(...)` and `HighlightStyle.define(...)` inside `src/components/editor/markdown-theme.ts`, not inline or mixed with preview selectors. Editor and preview must reference one shared semantic color source.
+- Canvas: `md.canvas` (`#09090B`); body/list prose: `md.text` (`#D4D4D8`).
+- List markers only: indigo `#818CF8`. Do not color whole list items through `tags.list` inheritance.
+- Links: indigo `#818CF8` with underlines. Code inside a link keeps its amber text and an indigo link underline.
+- Inline and block code share `md.code-text` (`#FCD34D`, amber-300) on `md.code-bg` (`#18181B`). Code blocks have continuous backgrounds, padding, borders, and rounded corners. No language-specific rainbow syntax highlighting.
+- Keep `md.secondary` and `md.syntax` as distinct tokens even though both initially use `#A1A1AA`. Quotes/language labels and Markdown delimiters have different semantic roles.
+- Blockquotes: `3px` left border using `md.quote-border` (`#52525B`), indentation, italic secondary text.
+- Selection takes precedence over search highlighting, which takes precedence over ordinary syntax colors; use the exact foreground/background pairs from the color contract.
+- Inline-code delimiters appear while the cursor/selection intersects the span and hide otherwise. This is a display-only decoration; stored Markdown and undo history stay intact. Fenced-code markers are outside this hiding behavior.
+- Assess amber brightness using a 30-line code block after implementation. If adjustment is warranted, tune the shared code token and recheck contrast; do not split inline/block code into separate colors.
