@@ -4,7 +4,7 @@
 
 - Added `markdownDecorations`, a parser-backed CodeMirror state field that decorates heading levels, parsed list markers, quote lines, fenced and indented code lines, code metadata, and inline code.
 - Inline code delimiters are replaced visually only when the relevant code span is not under the caret or selection. The document and history remain unchanged.
-- Added a logical CodeMirror copy handler so source Markdown is copied when inline delimiters are visually hidden, including line-wise empty selections and multiple non-empty ranges.
+- Preserved native CodeMirror copying and verified source Markdown is copied when inline delimiters are visually hidden.
 - Integrated the extension immediately after `markdownEditorTheme` in `MarkdownEditor`.
 
 ## TDD evidence
