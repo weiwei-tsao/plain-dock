@@ -28,7 +28,8 @@ Set `PLAYWRIGHT_BASE_URL` if the dev server isn't on `http://localhost:3000`.
 
 ## Scope
 
-Covers the golden path only: login, note CRUD, PLAIN/RICH mode switch, plain-text paste
-handling, folder workflows, and search (including the Cmd/Ctrl+K focus
-behavior per viewport tier from #40). Visual/exploratory checks that can't be
-expressed as a DOM assertion belong to Layer 3 (browser-use), not here.
+Covers login and note CRUD, the single CodeMirror Markdown editor, Edit/Preview
+round-trips, editor and preview state retention, outline navigation, image-paste
+completion, responsive outline behavior, plain-text paste handling, folder
+workflows, and search. Run stateful scenarios only against the disposable
+database described above.

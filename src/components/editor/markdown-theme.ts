@@ -37,7 +37,9 @@ export const markdownEditorTheme = EditorView.theme(
     '.cm-md-heading-3': { fontSize: '1.4em' },
     '.cm-md-heading-4': { fontSize: '1.2em' },
     '.cm-md-heading-5, .cm-md-heading-6': { fontSize: '1em' },
-    '.cm-md-list-marker': { color: 'var(--md-list-marker) !important' },
+    '.cm-md-list-marker, .cm-md-list-marker *': {
+      color: 'var(--md-list-marker) !important',
+    },
     '.cm-md-syntax-mark': { color: 'var(--md-syntax)' },
     '.cm-md-quote-line': {
       color: 'var(--md-secondary)',

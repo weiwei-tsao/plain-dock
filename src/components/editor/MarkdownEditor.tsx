@@ -10,9 +10,12 @@ import { syntaxHighlighting } from '@codemirror/language';
 import { markdownHighlightStyle, markdownEditorTheme } from './markdown-theme';
 import { markdownDecorations } from './markdown-decorations';
 import { searchHighlightExtension, getFirstMatchPos } from './markdown-search-highlight';
+import { restoreEditorScroll, type EditorScrollPosition } from './editor-scroll';
 import type { FormattingResult } from '@/lib/markdown/formatting';
 
 export interface MarkdownEditorHandle {
+  getScrollPosition: () => EditorScrollPosition;
+  restoreScrollPosition: (position: EditorScrollPosition, afterMeasure?: () => void) => void;
   focus: () => void;
   getSelection: () => { start: number; end: number };
   applyFormatting: (result: FormattingResult) => void;
@@ -95,7 +98,10 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
       const pos = getFirstMatchPos(view.state.doc, searchQuery);
       if (pos !== null) view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
 
-      return () => view.destroy();
+      return () => {
+        viewRef.current = null;
+        view.destroy();
+      };
       // One EditorView per mount. EditorCanvas remounts this component with
       // key={note.id} on note switch, so a fresh view always starts with the
       // right `value` baked into EditorState.create — no manual content-sync
@@ -116,6 +122,13 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
     }, [searchQuery]);
 
     useImperativeHandle(ref, () => ({
+      getScrollPosition: () => ({
+        top: viewRef.current?.scrollDOM.scrollTop ?? 0,
+        left: viewRef.current?.scrollDOM.scrollLeft ?? 0,
+      }),
+      restoreScrollPosition: (position, afterMeasure) => {
+        if (viewRef.current) restoreEditorScroll(viewRef.current, position, afterMeasure);
+      },
       focus: () => viewRef.current?.focus(),
       getSelection: () => {
         const sel = viewRef.current?.state.selection.main;
@@ -147,7 +160,7 @@ const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
       },
     }));
 
-    return <div ref={containerRef} className="h-full font-mono text-sm text-zinc-400" />;
+    return <div ref={containerRef} className="h-full font-mono text-sm text-[var(--md-text)]" />;
   },
 );
 

@@ -123,6 +123,7 @@ function EditorArea({
   if (activeNote) {
     return (
       <EditorCanvas
+        key={activeNote.id}
         ref={editorRef}
         note={activeNote}
         onUpdate={onUpdate}
@@ -373,9 +374,7 @@ export default function MainPage() {
     setNoteLoadAttempt((attempt) => attempt + 1);
   }, []);
 
-  // Cmd/Ctrl+K focuses search. Neither the CodeMirror MarkdownEditor (RICH)
-  // nor the plain <textarea> (PLAIN) bind this shortcut, so no conflict with
-  // the editor.
+  // Cmd/Ctrl+K focuses search. MarkdownEditor does not bind this shortcut.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
