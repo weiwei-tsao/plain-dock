@@ -2,10 +2,10 @@
 
 ## Overview
 
-RICH and PLAIN notes both store canonical Markdown/plain-text in
-`Note.content`. There is no HTML representation and no sanitizer — pasted
-content is always inserted as plain text (clipboard HTML is intentionally
-ignored everywhere).
+`Note.content` is canonical Markdown for every note. `Note.mode` is a frozen
+compatibility field carried through saves unchanged; it no longer selects an
+editor. Edit always uses CodeMirror. Preview renders escaped HTML through the
+single `MarkdownPreview.tsx` boundary; raw note HTML is displayed as text.
 
 ## Module Contents
 
@@ -24,6 +24,9 @@ ignored everywhere).
 - `find-matches.ts` — `findMatchRanges(text, query)`: case-insensitive match
   positions, used by `MarkdownEditor`'s CodeMirror search-highlight
   extension (`src/components/editor/markdown-search-highlight.ts`).
+- `render-html.ts` — parser-backed, GFM-aware Markdown-to-HTML rendering plus
+  semantic heading extraction. It is the only source permitted to supply HTML
+  to `MarkdownPreview.tsx`.
 
 ## Adding a new toolbar action
 
@@ -35,6 +38,6 @@ directly.
 
 ## `Note.content` invariant
 
-`content` is the same Markdown/plain-text string for both modes — `mode`
-only selects which editor renders it. Any code touching `content` should
-not assume RICH-mode content is HTML.
+`content` is the same canonical Markdown/plain-text string for every note.
+`mode` is a frozen compatibility field carried through saves unchanged; it no
+longer selects an editor or changes how `content` is interpreted.

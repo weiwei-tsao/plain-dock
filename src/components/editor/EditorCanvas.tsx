@@ -3,6 +3,7 @@
 import React, {
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   forwardRef,
@@ -10,7 +11,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import type { Folder, Note, NotePayload } from '@/types';
-import { NoteMode, type SaveState } from '@/types';
+import type { SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
 import { detectTerminalTable } from '@/lib/markdown/terminal-table';
 import { markdownToPlainText } from '@/lib/markdown/text-projection';
@@ -21,6 +22,8 @@ import {
   type FormattingResult,
 } from '@/lib/markdown/formatting';
 import MarkdownEditor, { type MarkdownEditorHandle } from './MarkdownEditor';
+import MarkdownPreview from './MarkdownPreview';
+import type { EditorScrollPosition } from './editor-scroll';
 import RichToolbar from './RichToolbar';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Toast from '../ui/Toast';
@@ -29,8 +32,8 @@ import {
   Trash2,
   Copy,
   Download,
-  FileCode,
-  Type,
+  Eye,
+  Pencil,
   AlertCircle,
   CheckCircle2,
   ChevronLeft,
@@ -137,46 +140,68 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     message: string;
     variant: 'success' | 'error' | 'info';
   } | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestQueue = useRef<Promise<unknown>>(Promise.resolve());
   const syncedNoteIdRef = useRef<string | null>(null);
   // Ref so triggerSave always reads current content without a stale closure
   const contentRef = useRef(note.content);
-  const currentModeRef = useRef(note.mode);
   const markdownEditorRef = useRef<MarkdownEditorHandle>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const editorScrollRef = useRef<HTMLDivElement>(null);
+  const previewScrollTopRef = useRef(0);
+  const editScrollRef = useRef<{
+    outer: EditorScrollPosition;
+    inner: EditorScrollPosition;
+  } | null>(null);
+  const rememberPreviewScroll = useCallback((top: number) => {
+    previewScrollTopRef.current = top;
+  }, []);
+  const rememberEditScroll = () => {
+    const outer = editorScrollRef.current;
+    editScrollRef.current = {
+      outer: { top: outer?.scrollTop ?? 0, left: outer?.scrollLeft ?? 0 },
+      inner: markdownEditorRef.current?.getScrollPosition() ?? { top: 0, left: 0 },
+    };
+  };
+  const togglePreview = () => {
+    if (!previewMode) rememberEditScroll();
+    setPreviewMode((value) => !value);
+  };
+  useLayoutEffect(() => {
+    const saved = editScrollRef.current;
+    if (previewMode || !saved) return;
+    const restoreOuter = () => {
+      const outer = editorScrollRef.current;
+      if (outer) {
+        outer.scrollTop = saved.outer.top;
+        outer.scrollLeft = saved.outer.left;
+      }
+    };
+    markdownEditorRef.current?.restoreScrollPosition(saved.inner, restoreOuter);
+  }, [previewMode]);
 
   // Sync content when switching notes — not on every save round-trip.
   // note.content changes after each save (persistChange propagates the server response),
   // which would re-run this effect and call setContent, jumping the cursor.
   // The ref guard ensures setContent only fires when the note ID actually changes.
   useEffect(() => {
-    currentModeRef.current = note.mode;
     if (syncedNoteIdRef.current === note.id) return;
     syncedNoteIdRef.current = note.id;
     setContent(note.content);
     contentRef.current = note.content;
     setLocalTitle(note.title);
     setSaveState('IDLE');
-    if (autoFocus) {
-      // RICH mode's focus is handled by MarkdownEditor's own autoFocus prop
-      // (it remounts per note.id). The textarea isn't remounted, so PLAIN
-      // mode needs an explicit focus call here.
-      if (note.mode === NoteMode.PLAIN) {
-        textareaRef.current?.focus();
-      }
-      onAutoFocusHandled?.();
-    }
-  }, [note.id, note.title, note.content, note.mode, autoFocus, onAutoFocusHandled]);
-
-  // Auto-resize textarea to match content height
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (note.mode === NoteMode.PLAIN && ta) {
-      ta.style.height = 'auto';
-      ta.style.height = `${ta.scrollHeight}px`;
-    }
-  }, [content, note.mode]);
+    setPreviewMode(false);
+    previewScrollTopRef.current = 0;
+    editScrollRef.current = null;
+    if (autoFocus) onAutoFocusHandled?.();
+  }, [note.id, note.title, note.content, autoFocus, onAutoFocusHandled]);
+  useEffect(
+    () => () => {
+      syncedNoteIdRef.current = null;
+    },
+    [],
+  );
 
   const persistChange = useCallback(
     (payload: Partial<NotePayload>, options: { showProgressAndSuccess?: boolean } = {}) => {
@@ -245,7 +270,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     const pasteRange = markdownEditorRef.current?.getSelection() ?? { start: 0, end: 0 };
     resizeImageToDataURL(file).then((dataUrl) => {
       if (syncedNoteIdRef.current !== pasteNoteId) return;
-      if (currentModeRef.current !== NoteMode.RICH) return;
       markdownEditorRef.current?.insertAt(pasteRange, `![${file.name}](${dataUrl})`);
     });
   }, []);
@@ -298,24 +322,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     if (folderId !== note.folderId) persistChange({ folderId });
   };
 
-  const handleSwitchMode = () => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    const newMode = note.mode === NoteMode.RICH ? NoteMode.PLAIN : NoteMode.RICH;
-    const textContent = markdownToPlainText(content);
-    persistChange(
-      { mode: newMode, content, textContent, title: localTitle },
-      { showProgressAndSuccess: false },
-    );
-  };
-
-  // mode is presentation only — content is the same canonical Markdown
-  // regardless of which editor is showing it, so its plain-text projection
-  // must be too. Branching this on note.mode would make Copy Plain / Export
-  // .txt / word-count non-deterministic: switching a note's mode doesn't
-  // touch content, so the same content could silently strip on one side of
-  // a mode toggle and not the other. Computed live from `content` (not the
-  // persisted note.textContent) since the debounced save may not have
-  // flushed yet.
+  // Project the current draft, including edits whose autosave is still pending.
+  // The frozen compatibility mode never changes how content is interpreted.
   const displayText = markdownToPlainText(content);
   const wordCount = countWords(displayText);
   const charCount = countCharacters(displayText);
@@ -359,7 +367,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             className="min-w-0 flex-1 bg-transparent text-lg font-medium text-zinc-100 placeholder-zinc-800 focus:outline-none md:text-xl"
           />
 
-          {/* Mobile action group — pin, mode, overflow */}
+          {/* Mobile action group — pin, preview, overflow */}
           <div className="flex shrink-0 items-center gap-1 md:hidden">
             <div className="flex items-center px-1">
               {saveState === 'SAVING' && (
@@ -380,20 +388,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             </button>
 
             <button
-              onClick={handleSwitchMode}
-              className={`rounded-lg p-2.5 transition-all ${
-                note.mode === NoteMode.RICH
-                  ? 'bg-indigo-400/10 text-indigo-400'
-                  : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
-              }`}
-              title="Switch Mode (Cmd+Shift+P)"
-              aria-label="Switch mode"
+              type="button"
+              onClick={togglePreview}
+              aria-label={previewMode ? 'Edit' : 'Preview'}
+              aria-pressed={previewMode}
+              title={previewMode ? 'Edit' : 'Preview'}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${previewMode ? 'border-indigo-400/30 bg-indigo-400/10 text-indigo-400' : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
             >
-              {note.mode === NoteMode.RICH ? (
-                <FileCode className="h-4 w-4" />
-              ) : (
-                <Type className="h-4 w-4" />
-              )}
+              {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <span className="hidden md:inline">{previewMode ? 'Edit' : 'Preview'}</span>
             </button>
 
             {/* Overflow menu */}
@@ -621,20 +624,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             </div>
 
             <button
-              onClick={handleSwitchMode}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-                note.mode === NoteMode.RICH
-                  ? 'border-indigo-500 bg-indigo-600 text-white hover:bg-indigo-500'
-                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
-              title="Switch Mode (Cmd+Shift+P)"
+              type="button"
+              onClick={togglePreview}
+              aria-label={previewMode ? 'Edit' : 'Preview'}
+              aria-pressed={previewMode}
+              title={previewMode ? 'Edit' : 'Preview'}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${previewMode ? 'border-indigo-400/30 bg-indigo-400/10 text-indigo-400' : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
             >
-              {note.mode === NoteMode.RICH ? (
-                <FileCode className="h-4 w-4" />
-              ) : (
-                <Type className="h-4 w-4" />
-              )}
-              {note.mode}
+              {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <span className="hidden md:inline">{previewMode ? 'Edit' : 'Preview'}</span>
             </button>
 
             <div className="mx-1 h-6 w-px bg-zinc-800" />
@@ -718,8 +716,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
         </div>
       </header>
 
-      {/* Formatting Toolbar for Rich Mode */}
-      {note.mode === NoteMode.RICH && (
+      {/* Formatting Toolbar */}
+      {!previewMode && (
         <RichToolbar
           onToggleInlineMark={(marker) =>
             applyFormatting((text, sel) => toggleInlineMark(text, sel, marker))
@@ -732,8 +730,15 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       )}
 
       {/* Editor Body */}
-      <div className="flex-1 overflow-auto p-6 font-mono transition-colors md:px-10 lg:px-20">
-        {note.mode === NoteMode.RICH ? (
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          ref={editorScrollRef}
+          data-testid="markdown-editor-scroll"
+          hidden={previewMode}
+          inert={previewMode}
+          aria-hidden={previewMode}
+          className="md-editor-surface h-full overflow-auto p-6 font-mono md:px-10 lg:px-20"
+        >
           <MarkdownEditor
             key={note.id}
             ref={markdownEditorRef}
@@ -748,37 +753,12 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             autoFocus={autoFocus}
             searchQuery={searchQuery}
           />
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => {
-              const val = e.target.value;
-              setContent(val);
-              contentRef.current = val;
-              triggerSave({ content: val });
-            }}
-            onPaste={(e) => {
-              const items = Array.from(e.clipboardData?.items ?? []);
-              const imageItem = items.find((item) => item.type.startsWith('image/'));
-              if (imageItem) {
-                e.preventDefault();
-                const file = imageItem.getAsFile();
-                const name = file?.name || 'clipboard-image.png';
-                const ta = textareaRef.current;
-                if (ta) {
-                  const start = ta.selectionStart;
-                  const end = ta.selectionEnd;
-                  const placeholder = `[image: ${name}]`;
-                  const newVal = content.slice(0, start) + placeholder + content.slice(end);
-                  setContent(newVal);
-                  contentRef.current = newVal;
-                  triggerSave({ content: newVal });
-                }
-              }
-            }}
-            placeholder="Start typing plain text..."
-            className="min-h-full w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-zinc-400 focus:outline-none"
+        </div>
+        {previewMode && (
+          <MarkdownPreview
+            content={content}
+            initialScrollTop={previewScrollTopRef.current}
+            onScrollPositionChange={rememberPreviewScroll}
           />
         )}
       </div>
@@ -795,9 +775,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className={note.mode === NoteMode.RICH ? 'text-indigo-500' : 'text-zinc-500'}>
-            {note.mode}
-          </span>
+          <span className="text-zinc-500">{previewMode ? 'PREVIEW' : 'EDIT'}</span>
           <span className="text-zinc-800">&bull;</span>
           <span>{wordCount} Words</span>
           <span className="text-zinc-800">&bull;</span>

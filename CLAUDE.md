@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is PlainDock
 
-PlainDock is a self-hosted, minimalist dual-mode note-taking app. Each note operates in either PLAIN (plain text) or RICH (Markdown source with syntax highlighting via CodeMirror) mode — both store the same canonical Markdown/plain-text `content`; `mode` only selects the editor. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
+PlainDock is a self-hosted, minimalist Markdown note-taking app. Every note is edited in one CodeMirror Markdown editor with an Edit/Preview toggle and a heading outline; `content` is canonical Markdown, and `mode` is a frozen compatibility field carried through saves unchanged. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Data is persisted through SQLite-compatible storage via Prisma: file SQLite locally/in Docker, Turso/libSQL on Vercel. Authentication uses a single shared password (`APP_PASSWORD` env var) with JWT sessions stored in httpOnly cookies.
 
 ## Development Commands
 
@@ -89,9 +89,10 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 - `src/app/page.tsx` — Main page (`'use client'`). Holds `notes`, `activeNoteId`, `activeNote`, `folders`, `activeFolderId`, pane-layout state (`folderWidth`, `notesWidth`, `folderCollapsed`, `viewportTier`), and mobile-nav state (`mobilePanel: 'list' | 'editor'`, `showFolders`). `mobilePanel` drives the stacked single-panel layout on phones — selecting or creating a note switches to `'editor'`; deleting the active note or pressing the back button returns to `'list'`. `showFolders` layers a full-screen Folders step on top of that stack on phones.
 - `src/app/login/page.tsx` — Login form, calls `/api/auth/login`, redirects to `/` on success.
 - `src/lib/api-client.ts` — Typed fetch wrapper (`noteApi`) for all `/api/notes` endpoints.
-- `src/components/editor/EditorCanvas.tsx` — Dual-mode editor: CodeMirror-based `MarkdownEditor` for RICH, `<textarea>` for PLAIN — both store the same canonical Markdown/plain-text `content`. Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Paste is always plain text (clipboard HTML is ignored); mode switching is lossless. Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + mode + overflow menu (phone only) + full action bar (tablet/desktop only).
-- `src/components/editor/MarkdownEditor.tsx` — CodeMirror 6 wrapper for RICH mode: Markdown syntax highlighting, search highlighting, and an imperative handle (`getSelection`, `applyFormatting`, `insertAtCursor`) used by `RichToolbar` and image paste.
-- `src/components/editor/RichToolbar.tsx` — Formatting toolbar for RICH mode, built on pure functions from `src/lib/markdown/formatting.ts` (not a rich-text editor API). Horizontally scrollable single row on phone; wraps on tablet/desktop.
+- `src/components/editor/EditorCanvas.tsx` — Single CodeMirror `MarkdownEditor` with an Edit/Preview toggle (preview renders the unsaved draft; the editor stays mounted so selection, undo, and scroll survive toggling). Auto-saves with 1s debounce and sequential request queue (`requestQueue` ref). Paste is always plain text (clipboard HTML is ignored). Accepts optional `onBack` prop (used on phones for back navigation). Header is a single row on all screen sizes: back button (phone only) + title + save indicator + pin + Preview/Edit toggle + overflow menu (phone only) + full action bar (tablet/desktop only).
+- `src/components/editor/MarkdownEditor.tsx` — CodeMirror 6 wrapper: Markdown syntax/structure decorations (`markdown-decorations.ts`, `markdown-theme.ts`), search highlighting, and an imperative handle (`getSelection`, `applyFormatting`, `insertAtCursor`) used by `RichToolbar` and image paste.
+- `src/components/editor/MarkdownPreview.tsx` — Sole `dangerouslySetInnerHTML` boundary; renders HTML from `src/lib/markdown/render-html.ts` (escapes raw HTML, allowlists link/image schemes). `MarkdownOutline.tsx` lists headings and scrolls the preview; `preview-scroll.ts` / `editor-scroll.ts` retain scroll positions across toggles.
+- `src/components/editor/RichToolbar.tsx` — Formatting toolbar, built on pure functions from `src/lib/markdown/formatting.ts` (not a rich-text editor API). Horizontally scrollable single row on phone; wraps on tablet/desktop.
 - `src/components/sidebar/FolderSidebar.tsx` — Folder list ("All Notes" + folders with counts) with inline create/rename/delete. `variant: 'pane' | 'mobile-fullscreen'` — pane mode renders inline with its own resizable width and edge toggle chevron; mobile-fullscreen mode renders full width with a header back button.
 - `src/components/sidebar/NotesList.tsx` — Search filtering, pull-to-refresh, and the note list with pin indicators. Owns the folder-toggle button that opens `FolderSidebar` (as an overlay on tablet, full-screen on mobile).
 - `src/components/sidebar/ResizeHandle.tsx` — Thin draggable divider between panes; reports `deltaX` via `onResize` as the user drags.
@@ -106,14 +107,15 @@ Three-pane (Folder Sidebar | Notes List | Editor) layout driven by JS viewport-t
 | Tablet  | 768–1023px | Two-pane (Notes List + Editor); Folder Sidebar auto-collapses to an overlay opened via toggle |
 | Desktop | 1024px+    | Three-pane, all resizable; Folder Sidebar can be manually collapsed    |
 
-See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. No centralized theme or CSS variables — colors are inline Tailwind classes. CodeMirror editor styles use hardcoded hex in `globals.css`. The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
+See `docs/superpowers/specs/2026-08-27-three-pane-layout-design.md` for exact tier semantics and state transitions. App chrome uses inline Tailwind classes; Markdown colors are `--md-*` CSS variables in `globals.css`, shared by the CodeMirror theme (`markdown-theme.ts`) and the preview (see `.claude/rules/styling.md`). The `docs/mobile-ux-responsive-design.md` file captures the original two-pane design rationale and trade-offs.
 
 ### Markdown (`src/lib/markdown/`)
 
-Pure, framework-independent text functions shared by both editor modes:
+Pure, framework-independent text functions used by the editor and preview:
 `terminal-table.ts` (paste-time table/code detection), `text-projection.ts`
 (`markdownToPlainText` for `Note.textContent`), `formatting.ts` (toolbar
-actions), `find-matches.ts` (search highlighting). See
+actions), `find-matches.ts` (search highlighting), `render-html.ts`
+(preview HTML + heading outline). See
 `.claude/rules/markdown.md`.
 
 ## Running the App

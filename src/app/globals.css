@@ -19,3 +19,150 @@ body {
   background-color: #000;
   color: #fff;
 }
+
+:root {
+  --md-canvas: #09090b;
+  --md-text: #d4d4d8;
+  --md-heading: #f4f4f5;
+  --md-secondary: #a1a1aa;
+  --md-syntax: #a1a1aa;
+  --md-list-marker: #818cf8;
+  --md-link: #818cf8;
+  --md-code-text: #fcd34d;
+  --md-code-bg: #18181b;
+  --md-border: #3f3f46;
+  --md-quote-border: #52525b;
+  --md-selection-bg: #312e81;
+  --md-selection-text: #f4f4f5;
+  --md-search-bg: #854d0e;
+  --md-search-text: #fef3c7;
+}
+.md-preview,
+.md-editor-surface {
+  color: var(--md-text);
+  background: var(--md-canvas);
+}
+.md-preview {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.md-preview :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--md-heading);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.5em 0 0.6em;
+  scroll-margin-top: 1.5rem;
+}
+.md-preview h1 {
+  font-size: 2em;
+}
+.md-preview h2 {
+  font-size: 1.65em;
+}
+.md-preview h3 {
+  font-size: 1.4em;
+}
+.md-preview h4 {
+  font-size: 1.2em;
+}
+.md-preview :is(h5, h6) {
+  font-size: 1em;
+}
+.md-preview p {
+  margin: 0.8em 0;
+}
+.md-preview strong {
+  color: var(--md-heading);
+  font-weight: 700;
+}
+.md-preview em {
+  font-style: italic;
+}
+.md-preview del {
+  text-decoration: line-through;
+}
+.md-preview a {
+  color: var(--md-link);
+  text-decoration: underline;
+  text-decoration-color: var(--md-link);
+}
+.md-preview ul {
+  list-style: disc;
+}
+.md-preview ol {
+  list-style: decimal;
+}
+.md-preview :is(ul, ol) {
+  padding-left: 1.6em;
+  margin: 0.8em 0;
+}
+.md-preview li {
+  color: var(--md-text);
+  margin: 0.3em 0;
+}
+.md-preview li::marker {
+  color: var(--md-list-marker);
+}
+.md-preview code {
+  color: var(--md-code-text);
+  background: var(--md-code-bg);
+  border-radius: 0.2em;
+  padding: 0 0.3em;
+  font-family: var(--font-mono, monospace);
+}
+.md-preview a code {
+  color: var(--md-code-text);
+}
+.md-preview pre {
+  color: var(--md-code-text);
+  background: var(--md-code-bg);
+  border: 1px solid var(--md-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 1em 0;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.md-preview pre code {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.md-preview blockquote {
+  color: var(--md-secondary);
+  border-left: 3px solid var(--md-quote-border);
+  padding-left: 1em;
+  margin: 1em 0;
+  font-style: italic;
+}
+.md-preview table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.md-preview :is(th, td) {
+  border: 1px solid var(--md-border);
+  padding: 0.5em 0.75em;
+}
+.md-preview th {
+  color: var(--md-heading);
+  font-weight: 700;
+}
+.md-preview img {
+  max-width: 100%;
+  height: auto;
+}
+.md-preview hr {
+  border: 0;
+  border-top: 1px solid var(--md-border);
+  margin: 1.5em 0;
+}
+/* Native selection paints over marks, including nested syntax/search decorations.
+   Do not add drawSelection: its background layer cannot override text colors. */
+.md-preview::selection,
+.md-preview *::selection {
+  background: var(--md-selection-bg) !important;
+  color: var(--md-selection-text) !important;
+}
