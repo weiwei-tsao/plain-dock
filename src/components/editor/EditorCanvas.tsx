@@ -393,7 +393,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               aria-label={previewMode ? 'Edit' : 'Preview'}
               aria-pressed={previewMode}
               title={previewMode ? 'Edit' : 'Preview'}
-              className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-700"
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${previewMode ? 'border-indigo-400/30 bg-indigo-400/10 text-indigo-400' : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
             >
               {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               <span className="hidden md:inline">{previewMode ? 'Edit' : 'Preview'}</span>
@@ -629,7 +629,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               aria-label={previewMode ? 'Edit' : 'Preview'}
               aria-pressed={previewMode}
               title={previewMode ? 'Edit' : 'Preview'}
-              className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-bold text-zinc-300 hover:bg-zinc-700"
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${previewMode ? 'border-indigo-400/30 bg-indigo-400/10 text-indigo-400' : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}`}
             >
               {previewMode ? <Pencil className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               <span className="hidden md:inline">{previewMode ? 'Edit' : 'Preview'}</span>
