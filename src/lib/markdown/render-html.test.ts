@@ -157,7 +157,7 @@ describe('renderMarkdown: inline formatting and code', () => {
 
   it('renders a fenced code block, escaped, with no syntax highlighting', () => {
     const { html } = renderMarkdown('```js\nconst x = 1;\nconst y = 2;\n```');
-    expect(html).toBe('<pre><code>\nconst x = 1;\nconst y = 2;\n</code></pre>');
+    expect(html).toBe('<pre><code>const x = 1;\nconst y = 2;</code></pre>');
   });
 
   it('decodes a backslash-escaped character to its literal form', () => {
@@ -211,6 +211,31 @@ describe('renderMarkdown: links and images', () => {
   it('renders a pasted data:image/webp image (the paste-image contract)', () => {
     const { html } = renderMarkdown('![paste](data:image/webp;base64,AAAA)');
     expect(html).toBe('<p><img src="data:image/webp;base64,AAAA" alt="paste" /></p>');
+  });
+
+  it('rejects scheme-less and protocol-relative image sources', () => {
+    expect(isSafeImageSrc('/api/notes')).toBe(false);
+    expect(isSafeImageSrc('//evil.com/a.png')).toBe(false);
+    expect(renderMarkdown('![y](//evil.com/a.png)').html).toBe('<p>y</p>');
+  });
+
+  it('decodes entities in destinations before the scheme check', () => {
+    expect(renderMarkdown('[a](http://x?a=1&amp;b=2)').html).toContain(
+      'href="http://x?a=1&amp;b=2"',
+    );
+    expect(renderMarkdown('[a](&#106;avascript:alert(1))').html).toBe('<p>a</p>');
+  });
+
+  it('does not leave a trailing space inside a titled link', () => {
+    expect(renderMarkdown('[a](http://x "t")').html).toContain('>a</a>');
+  });
+
+  it('keeps fence, list indent and quote residue out of code blocks', () => {
+    expect(renderMarkdown('- item\n\n  ```\n  a\n\n  b\n  ```').html).toContain(
+      '<pre><code>a\n\nb</code></pre>',
+    );
+    expect(renderMarkdown('> ```\n> a\n> b\n> ```').html).toContain('<pre><code>a\nb</code></pre>');
+    expect(renderMarkdown('    a\n    b').html).toBe('<pre><code>a\nb</code></pre>');
   });
 
   it('degrades a non-allowlisted image src to its alt text, no <img> tag', () => {
@@ -315,7 +340,7 @@ describe('renderMarkdown: security boundary', () => {
       '<p><code>&lt;tag&gt; &amp; value</code></p>',
     );
     expect(renderMarkdown('```html\n<script>&alert</script>\n```').html).toBe(
-      '<pre><code>\n&lt;script&gt;&amp;alert&lt;/script&gt;\n</code></pre>',
+      '<pre><code>&lt;script&gt;&amp;alert&lt;/script&gt;</code></pre>',
     );
   });
 

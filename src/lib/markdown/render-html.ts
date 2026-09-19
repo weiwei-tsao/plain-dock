@@ -35,7 +35,8 @@ export function isSafeLinkHref(url: string): boolean {
 export function isSafeImageSrc(url: string): boolean {
   if (hasControlChars(url)) return false;
   const scheme = getScheme(url);
-  if (scheme === null) return true;
+  // Scheme-less and protocol-relative sources are rejected: only <a href> may be relative.
+  if (scheme === null) return false;
   if (scheme === 'data') return IMAGE_DATA_MIME_RE.test(url.trim());
   return IMAGE_URL_SCHEMES.has(scheme);
 }
@@ -145,18 +146,41 @@ export function renderMarkdown(content: string): RenderResult {
   const tree = markdownParser.parse(source);
   const headings: Heading[] = [];
 
-  function renderChildren(node: SyntaxNode): string {
+  function renderChildren(node: SyntaxNode, to = node.to): string {
     let out = '';
     let pos = node.from;
     let child = node.firstChild;
-    while (child) {
-      out += escapeHtml(source.slice(pos, child.from));
+    while (child && child.from < to) {
+      const gap = source.slice(pos, child.from);
+      // An indented code block's own indent sits in the preceding gap.
+      out += escapeHtml(child.type.name === 'CodeBlock' ? gap.replace(/[ \t]+$/, '') : gap);
       out += renderNode(child);
       pos = child.to;
       child = child.nextSibling;
     }
-    out += escapeHtml(source.slice(pos, node.to));
+    out += escapeHtml(source.slice(pos, to));
     return out;
+  }
+
+  // Emit only CodeText so fences, list indent and "> " residue never leak into <code>;
+  // gaps between CodeText nodes keep their line breaks (blank lines survive).
+  function renderCode(node: SyntaxNode): string {
+    let out = '';
+    let prevEnd = -1;
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      if (child.type.name !== 'CodeText') continue;
+      if (prevEnd >= 0)
+        out += '\n'.repeat(source.slice(prevEnd, child.from).split('\n').length - 1);
+      out += escapeHtml(source.slice(child.from, child.to));
+      prevEnd = child.to;
+    }
+    return `<pre><code>${out}</code></pre>`;
+  }
+
+  // Destinations may contain entities/escapes; decode before the scheme check so
+  // "&#106;avascript:" cannot slip past it.
+  function extractDestination(urlNode: SyntaxNode): string {
+    return extractUrl(urlNode).replace(/&(?:#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, decodeEntity);
   }
 
   function extractUrl(urlNode: SyntaxNode): string {
@@ -208,9 +232,17 @@ export function renderMarkdown(content: string): RenderResult {
 
   function renderLink(node: SyntaxNode): string {
     const urlNode = node.getChild('URL');
-    const inner = renderChildren(node);
+    // Render only the label (up to the closing "]"), not the gap before the title.
+    let labelEnd = node.to;
+    for (let c = node.firstChild?.nextSibling; c; c = c.nextSibling) {
+      if (c.type.name === 'LinkMark') {
+        labelEnd = c.from;
+        break;
+      }
+    }
+    const inner = renderChildren(node, labelEnd);
     if (!urlNode) return inner;
-    const url = extractUrl(urlNode);
+    const url = extractDestination(urlNode);
     if (!isSafeLinkHref(url)) return inner;
     return `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
   }
@@ -219,7 +251,7 @@ export function renderMarkdown(content: string): RenderResult {
     const urlNode = node.getChild('URL');
     const alt = extractText(node);
     if (!urlNode) return escapeHtml(alt);
-    const url = extractUrl(urlNode);
+    const url = extractDestination(urlNode);
     if (!isSafeImageSrc(url)) return escapeHtml(alt);
     return `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(alt)}" />`;
   }
@@ -309,7 +341,7 @@ export function renderMarkdown(content: string): RenderResult {
         return escapeHtml(decodeEntity(source.slice(node.from, node.to)));
       case 'FencedCode':
       case 'CodeBlock':
-        return `<pre><code>${renderChildren(node)}</code></pre>`;
+        return renderCode(node);
       case 'CodeText':
         return escapeHtml(source.slice(node.from, node.to));
       case 'Link':
