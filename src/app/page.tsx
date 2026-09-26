@@ -13,6 +13,9 @@ import {
   NOTES_WIDTH_MIN,
   NOTES_WIDTH_MAX,
   NOTES_WIDTH_DEFAULT,
+  getLastSelection,
+  saveLastSelection,
+  pickInitialSelection,
 } from '@/lib/layout-storage';
 
 const sortNotes = (list: Note[]): Note[] =>
@@ -202,35 +205,39 @@ export default function MainPage() {
     return data;
   }, []);
 
-  const activeFolderIdRef = useRef(activeFolderId);
-  activeFolderIdRef.current = activeFolderId;
+  const loadFolders = useCallback(async () => {
+    const data = await folderApi.list();
+    setFolders(data);
+    return data;
+  }, []);
 
   const activeNoteIdRef = useRef(activeNoteId);
   activeNoteIdRef.current = activeNoteId;
 
+  // Don't persist the empty initial selection over the saved one before it's restored.
+  const selectionRestoredRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
-    loadNotes().then((data) => {
-      if (cancelled || activeNoteIdRef.current) return;
-      const folderId = activeFolderIdRef.current;
-      const scoped = folderId ? data.filter((n) => n.folderId === folderId) : data;
-      if (scoped.length === 0) return;
-      setActiveNoteId(scoped[0].id);
+    Promise.all([loadNotes(), loadFolders()]).then(([noteData, folderData]) => {
+      if (cancelled) return;
+      selectionRestoredRef.current = true;
+      if (activeNoteIdRef.current) return;
+      const { folderId, noteId } = pickInitialSelection(noteData, folderData, getLastSelection());
+      setActiveFolderId(folderId);
+      if (!noteId) return;
+      setActiveNoteId(noteId);
       setMobilePanel('editor');
     });
     return () => {
       cancelled = true;
     };
-  }, [loadNotes]);
-
-  const loadFolders = useCallback(async () => {
-    const data = await folderApi.list();
-    setFolders(data);
-  }, []);
+  }, [loadNotes, loadFolders]);
 
   useEffect(() => {
-    loadFolders();
-  }, [loadFolders]);
+    if (!selectionRestoredRef.current) return;
+    saveLastSelection({ folderId: activeFolderId, noteId: activeNoteId });
+  }, [activeFolderId, activeNoteId]);
 
   // Fetch full note (with content) when selection changes
   useEffect(() => {
