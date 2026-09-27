@@ -66,6 +66,15 @@ describe('markdownWithTitle', () => {
     expect(markdownWithTitle('Plan', '# Plan #\n\nbody')).toBe('# Plan #\n\nbody');
   });
 
+  test('treats a 4-space-indented opening line as code, not a heading', () => {
+    expect(markdownWithTitle('Plan', '    # Plan\n\nbody')).toBe('# Plan\n\n    # Plan\n\nbody');
+  });
+
+  test('accepts up to 3 spaces of heading indent and leading blank lines', () => {
+    expect(markdownWithTitle('Plan', '   # Plan\n\nbody')).toBe('   # Plan\n\nbody');
+    expect(markdownWithTitle('Plan', '\n\n# Plan\n\nbody')).toBe('\n\n# Plan\n\nbody');
+  });
+
   test('keeps the title when the opening heading differs', () => {
     expect(markdownWithTitle('Plan', '# Other\n\nbody')).toBe('# Plan\n\n# Other\n\nbody');
   });

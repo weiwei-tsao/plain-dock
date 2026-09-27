@@ -18,10 +18,11 @@ export function markdownWithTitle(title: string, content: string): string {
   if (!t || t === deriveTitleFromText(markdownToPlainText(content)).trim()) return content;
   // ponytail: regex check of the opening heading (ATX or setext, inline marks stripped),
   // not a full parse — keeps the Markdown parser out of this server-shared module.
-  const [first, second = ''] = content.trimStart().split('\n', 2);
-  const isAtx = /^#{1,6}\s/.test(first);
-  const isSetext = first.trim() !== '' && /^ {0,3}(?:=+|-+)\s*$/.test(second);
-  const headingText = markdownToPlainText(first.replace(/\s+#+\s*$/, '')).trim();
+  // Drop leading blank lines only: first-line indentation matters (4+ spaces is a code block).
+  const [first, second = ''] = content.replace(/^(?:[ \t]*\n)+/, '').split('\n', 2);
+  const isAtx = /^ {0,3}#{1,6}\s/.test(first);
+  const isSetext = /^ {0,3}\S/.test(first) && /^ {0,3}(?:=+|-+)\s*$/.test(second);
+  const headingText = markdownToPlainText(first.trim().replace(/\s+#+$/, '')).trim();
   if ((isAtx || isSetext) && headingText === t) return content;
   return `# ${t}\n\n${content}`;
 }
