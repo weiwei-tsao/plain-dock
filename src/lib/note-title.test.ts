@@ -56,6 +56,16 @@ describe('markdownWithTitle', () => {
     expect(markdownWithTitle('Plan', '\n## Plan\n\nbody')).toBe('\n## Plan\n\nbody');
   });
 
+  test('skips when the body opens with the same setext heading', () => {
+    expect(markdownWithTitle('Plan', 'Plan\n====\n\nbody')).toBe('Plan\n====\n\nbody');
+    expect(markdownWithTitle('Plan', 'Plan\n----\n\nbody')).toBe('Plan\n----\n\nbody');
+  });
+
+  test('ignores inline formatting and closing hashes in the opening heading', () => {
+    expect(markdownWithTitle('Plan', '## **Plan**\n\nbody')).toBe('## **Plan**\n\nbody');
+    expect(markdownWithTitle('Plan', '# Plan #\n\nbody')).toBe('# Plan #\n\nbody');
+  });
+
   test('keeps the title when the opening heading differs', () => {
     expect(markdownWithTitle('Plan', '# Other\n\nbody')).toBe('# Plan\n\n# Other\n\nbody');
   });

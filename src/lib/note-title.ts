@@ -16,8 +16,12 @@ export function deriveTitleFromText(text: string): string {
 export function markdownWithTitle(title: string, content: string): string {
   const t = title.trim();
   if (!t || t === deriveTitleFromText(markdownToPlainText(content)).trim()) return content;
-  const firstLine = content.trimStart().split('\n', 1)[0];
-  const heading = firstLine.match(/^#{1,6}\s+(.*?)(?:\s+#+)?\s*$/);
-  if (heading?.[1] === t) return content;
+  // ponytail: regex check of the opening heading (ATX or setext, inline marks stripped),
+  // not a full parse — keeps the Markdown parser out of this server-shared module.
+  const [first, second = ''] = content.trimStart().split('\n', 2);
+  const isAtx = /^#{1,6}\s/.test(first);
+  const isSetext = first.trim() !== '' && /^ {0,3}(?:=+|-+)\s*$/.test(second);
+  const headingText = markdownToPlainText(first.replace(/\s+#+\s*$/, '')).trim();
+  if ((isAtx || isSetext) && headingText === t) return content;
   return `# ${t}\n\n${content}`;
 }
