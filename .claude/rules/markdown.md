@@ -15,7 +15,7 @@ single `MarkdownPreview.tsx` boundary; raw note HTML is displayed as text.
   Markdown table or fenced code block.
 - `text-projection.ts` — `markdownToPlainText(markdown)`: best-effort,
   regex-based Markdown -> plain text used for `Note.textContent` (sidebar
-  preview, search, title fallback), Copy Plain, and Export `.txt`. Not a
+  preview, search, title fallback) and word/character counts. Not a
   full parser — approximate results are fine for these consumers.
 - `formatting.ts` — `toggleInlineMark`, `toggleLinePrefix`, `wrapCodeBlock`:
   pure functions taking `(text, selection, marker/prefix)` and returning

@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { selectionHref } from '@/lib/layout-storage';
 import Toast from '@/components/ui/Toast';
 
 interface FolderSidebarProps {
@@ -136,8 +137,14 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
             />
           ) : (
             <div key={folder.id} className="group relative">
-              <button
-                onClick={() => onSelectFolder(folder.id)}
+              {/* A real link so right-click / Cmd-click / middle-click open the folder in a new tab */}
+              <a
+                href={selectionHref({ folderId: folder.id, noteId: null })}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                  e.preventDefault();
+                  onSelectFolder(folder.id);
+                }}
                 className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 pr-9 text-sm transition-colors ${
                   activeFolderId === folder.id
                     ? 'bg-zinc-800 text-white'
@@ -149,7 +156,7 @@ const FolderSidebar: React.FC<FolderSidebarProps> = ({
                 <span className="text-[10px] text-zinc-600">
                   {notes.filter((n) => n.folderId === folder.id).length}
                 </span>
-              </button>
+              </a>
               <button
                 onClick={(e) => {
                   if (menuFolderId === folder.id) {

@@ -1,20 +1,21 @@
 # PlainDock
 
-A self-hosted, minimalist dual-mode note-taking app. Each note operates in **PLAIN** (plain-text `<textarea>`) or **RICH** (Markdown source editing with CodeMirror syntax highlighting) mode — both modes store the same canonical Markdown/plain-text `content`, so switching modes is lossless. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Fully responsive across phone, tablet, and desktop.
+A self-hosted, minimalist Markdown note-taking app. Every note is edited in one CodeMirror Markdown editor with an Edit/Preview toggle and a heading outline, and is stored as canonical Markdown. Pasted content is always inserted as plain text; clipboard HTML is intentionally ignored. Fully responsive across phone, tablet, and desktop.
 
 [中文文档](README.zh.md)
 
 ## Features
 
-- **Dual-mode editing** — switch between plain text (`<textarea>`) and a CodeMirror-based Markdown source editor per note; both modes share the same underlying content, so switching is lossless with no confirmation dialog
+- **Markdown editor with preview** — a CodeMirror 6 Markdown editor with a formatting toolbar and an Edit/Preview toggle; Preview renders the unsaved draft (raw HTML in notes is shown as text) and a heading outline jumps to sections
+- **Folders** — organize notes into folders alongside "All Notes"; create, rename, and delete folders inline (deleting a folder moves its notes back to All Notes)
 - **Plain-text paste** — pasted content is always inserted as plain text; clipboard HTML is intentionally ignored
 - **Auto-save** — 1-second debounced saves with a sequential request queue to prevent race conditions
 - **Pin & search** — pin notes to the top; search filters by title and text content simultaneously
-- **Copy & export** — copy note text to clipboard; export as `.txt` or `.md`
-- **Mobile-responsive** — stacked single-panel layout on phones (< 768px), narrower sidebar on tablet (768–1023px), full layout on desktop (1024px+)
-- **Collapsible sidebar** — collapse/expand on tablet and desktop; hidden on phone via back-button navigation
+- **Copy & download** — copy a note's Markdown to the clipboard; download it as a `.md` file with the title as an `# H1` heading
+- **Tabs & links** — each tab keeps its folder/note in the URL, so reloads restore it; right-click (or Cmd/Ctrl/middle-click) a note or folder to open it in a new tab; lists refresh when you switch back to a window
+- **Responsive three-pane layout** — Folders | Notes | Editor on desktop (1024px+) with resizable panes whose widths are remembered and a collapsible folder pane; Notes + Editor on tablet (768–1023px) with folders as an overlay; a stacked Notes → Folders → Editor flow on phones (< 768px)
 - **Password-protected** — single shared password with JWT session cookies (httpOnly, 30-day expiry)
-- **Edge middleware** — lightweight JWT expiry check in Edge Runtime; full HMAC-SHA256 verification in API routes
+- **Edge middleware** — verifies the session JWT's HMAC-SHA256 signature and expiry on every request in Edge Runtime (Web Crypto API)
 - **SQLite-compatible storage** - local/Docker use file SQLite; Vercel can use Turso/libSQL
 - **Docker-ready** — multi-stage Dockerfile with standalone Next.js output; migrations run automatically on container start
 
@@ -130,6 +131,7 @@ Vercel serverless functions cannot persist writes to a local SQLite file. Use Tu
    ```bash
    turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
    turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
+   turso db shell your-database < prisma/migrations/20260719031554_add_note_folders/migration.sql
    ```
    Apply any future `prisma/migrations/*/migration.sql` files the same way before deploying code that depends on them.
 
@@ -151,6 +153,7 @@ For existing local SQLite data, back up the database first, import it with Turso
 | `npm run docker:sync-from-turso` | Manually replace Docker SQLite data with a backed-up Turso snapshot |
 | `npm test` | Run the Vitest test suite |
 | `npm run test:watch` | Run Vitest in watch mode |
+| `npm run test:e2e` | Run the Playwright E2E suite (setup in `e2e/README.md`) |
 | `npm run typecheck` | TypeScript type check |
 | `npx prisma migrate dev` | Create and apply database migrations |
 | `npx prisma studio` | Browse the database via GUI |
@@ -164,23 +167,28 @@ Browser
         ├── /                 Main editor page
         └── /api/
               ├── auth/       Login · Logout
-              └── notes/      CRUD + full note detail
+              ├── notes/      CRUD + full note detail
+              └── folders/    List with counts · create · rename · delete
 
 Client Components (src/components/)
-  ├── Sidebar                 Note list, search, pin indicators
+  ├── sidebar/
+  │     ├── FolderSidebar     All Notes + folders, inline create/rename/delete
+  │     ├── NotesList         Note list, search, pin indicators, pull-to-refresh
+  │     └── ResizeHandle      Draggable divider between panes
   └── editor/
-        ├── EditorCanvas      Dual-mode editor, auto-save, paste handling
-        ├── MarkdownEditor    CodeMirror 6 wrapper for RICH mode
+        ├── EditorCanvas      Editor shell: Edit/Preview toggle, auto-save, paste handling, note actions
+        ├── MarkdownEditor    CodeMirror 6 wrapper
+        ├── MarkdownPreview   Preview pane (sole HTML rendering boundary) + MarkdownOutline
         └── RichToolbar       Markdown formatting toolbar
 
 Server Libraries (src/lib/)
   ├── db.ts                   Prisma singleton; file SQLite or Turso/libSQL by DATABASE_URL
   ├── auth.ts                 JWT sign/verify (server-only)
   ├── serialize.ts            Prisma → client type conversion (server-only)
-  └── markdown/               Shared Markdown text functions (paste detection, plain-text projection, formatting, search)
+  └── markdown/               Shared Markdown functions (paste detection, plain-text projection, formatting, search, preview HTML)
 
 Middleware (src/middleware.ts)
-  └── Edge Runtime — JWT structure + expiry check on every request
+  └── Edge Runtime — JWT HMAC-SHA256 signature + expiry check on every request
 ```
 
 ## Tech Stack
@@ -189,6 +197,6 @@ Middleware (src/middleware.ts)
 - **React 19** + **TypeScript** (strict)
 - **Prisma** + **SQLite/libSQL** (file SQLite locally/in Docker, Turso on Vercel)
 - **Tailwind CSS v4** (PostCSS plugin, no config file)
-- **CodeMirror 6** — Markdown source editor with syntax highlighting for RICH mode
+- **CodeMirror 6** — Markdown editor with syntax highlighting
 - **Lucide React** — icons
 - **jsonwebtoken** — JWT signing and verification

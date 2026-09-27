@@ -20,6 +20,7 @@
 - Page-level state (note list, active note, search query) lives in `src/app/page.tsx` and is passed down as props.
 - Component-local UI state (save status, local title input) stays in the component.
 - No global state library — props and local state only.
+- The selected folder/note is mirrored to the URL (`?folder=&note=`), so anything that selects a folder or note in a list must be an `<a href={selectionHref(...)}>` (from `@/lib/layout-storage`), not a `<button>`: intercept only a plain click (`preventDefault` unless a modifier key is held) and call the select handler. Turning these back into buttons silently breaks right-click "Open in new tab", Cmd/Ctrl-click, and middle-click.
 
 ## Auto-Save Pattern (EditorCanvas)
 

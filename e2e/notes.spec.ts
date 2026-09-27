@@ -36,16 +36,15 @@ test('creates, edits, autosaves, and deletes a note', async ({ page }) => {
   await contentSaved;
 
   // Reload to confirm the autosave actually persisted, not just local state.
-  // Reselect by title afterward — reload also resets which note the app
-  // auto-selects, and that isn't necessarily this one (e.g. a pre-existing
-  // pinned note in the disposable DB always sorts first).
+  // The selection is restored from the URL, but reselect by title anyway so
+  // the assertion doesn't depend on that behavior.
   await page.reload();
-  await page.getByRole('button', { name: startsWith(title) }).click();
+  await page.getByRole('link', { name: startsWith(title) }).click();
   await expect(page.getByPlaceholder('Untitled')).toHaveValue(title);
   await expect(page.locator('.cm-content')).toContainText(content);
 
   await deleteActiveNote(page);
-  await expect(page.getByRole('button', { name: startsWith(title) })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: startsWith(title) })).toHaveCount(0);
 });
 
 test('ignores clipboard HTML and inserts plain text', async ({ page }) => {
@@ -206,15 +205,15 @@ test('resets Preview position when opening another note', async ({ page }) => {
   await setMarkdown(page, '# Second');
   await secondSaved;
   await expect(viewToggle(page, 'Preview')).toHaveAttribute('aria-pressed', 'false');
-  await page.getByRole('button', { name: startsWith(first) }).click();
+  await page.getByRole('link', { name: startsWith(first) }).click();
   await viewToggle(page, 'Preview').click();
   await expect(page.getByTestId('markdown-preview-scroll')).toHaveJSProperty('scrollTop', 0);
   await page.reload();
-  await page.getByRole('button', { name: startsWith(first) }).click();
+  await page.getByRole('link', { name: startsWith(first) }).click();
   await expect(viewToggle(page, 'Preview')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.cm-content')).toContainText('First');
   await deleteActiveNote(page);
-  await page.getByRole('button', { name: startsWith(second) }).click();
+  await page.getByRole('link', { name: startsWith(second) }).click();
   await deleteActiveNote(page);
 });
 
@@ -235,7 +234,7 @@ test('shows the outline from the md breakpoint and never overflows horizontally'
   await expect(outline).toBeHidden();
   await page.setViewportSize({ width: 768, height: 800 });
   await page.reload();
-  await page.getByRole('button', { name: startsWith(title) }).click();
+  await page.getByRole('link', { name: startsWith(title) }).click();
   await viewToggle(page, 'Preview').click();
   await expect(outline).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -346,9 +345,9 @@ test('ignores image completion after its editor session closes', async ({ page }
     )
     .toBe(true);
   await expect(page.locator('.cm-content')).toHaveText('# Other');
-  await page.getByRole('button', { name: startsWith(first) }).click();
+  await page.getByRole('link', { name: startsWith(first) }).click();
   await expect(page.locator('.cm-content')).toHaveText('# Original');
   await deleteActiveNote(page);
-  await page.getByRole('button', { name: startsWith(second) }).click();
+  await page.getByRole('link', { name: startsWith(second) }).click();
   await deleteActiveNote(page);
 });

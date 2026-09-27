@@ -13,6 +13,11 @@ import {
   NOTES_WIDTH_MIN,
   NOTES_WIDTH_MAX,
   NOTES_WIDTH_DEFAULT,
+  getLastSelection,
+  saveLastSelection,
+  pickInitialSelection,
+  selectionFromSearch,
+  selectionToSearch,
 } from '@/lib/layout-storage';
 
 const sortNotes = (list: Note[]): Note[] =>
@@ -202,35 +207,90 @@ export default function MainPage() {
     return data;
   }, []);
 
-  const activeFolderIdRef = useRef(activeFolderId);
-  activeFolderIdRef.current = activeFolderId;
+  const loadFolders = useCallback(async () => {
+    const data = await folderApi.list();
+    setFolders(data);
+    return data;
+  }, []);
 
+  // Current-selection refs for async callbacks (initial restore, late save responses)
+  // that must not act on the state captured when they were created.
   const activeNoteIdRef = useRef(activeNoteId);
   activeNoteIdRef.current = activeNoteId;
+  const activeFolderIdRef = useRef(activeFolderId);
+  activeFolderIdRef.current = activeFolderId;
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+
+  // Selection lives in the URL (per tab, survives reload); localStorage only seeds a bare `/`.
+  // Don't persist the empty initial selection over the saved one before it's restored.
+  // State, not a ref: finishing the restore must itself sync the URL/localStorage, even
+  // when the user already picked something and the restore is skipped.
+  const [selectionRestored, setSelectionRestored] = useState(false);
+  // Folders can load (and be clicked) before notes do; a folder picked in that window
+  // must not be overwritten by the restore below.
+  const folderPickedRef = useRef(false);
+  const selectFolder = useCallback((id: string | null) => {
+    folderPickedRef.current = true;
+    setActiveFolderId(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    loadNotes().then((data) => {
-      if (cancelled || activeNoteIdRef.current) return;
-      const folderId = activeFolderIdRef.current;
-      const scoped = folderId ? data.filter((n) => n.folderId === folderId) : data;
-      if (scoped.length === 0) return;
-      setActiveNoteId(scoped[0].id);
+    // A failed folders request must not block opening a note: treat it as no folders
+    // (a saved folder then falls back to All Notes).
+    const folders = loadFolders().catch(() => []);
+    Promise.all([loadNotes(), folders]).then(([noteData, folderData]) => {
+      if (cancelled) return;
+      setSelectionRestored(true);
+      if (activeNoteIdRef.current || folderPickedRef.current) return;
+      const saved = selectionFromSearch(window.location.search) ?? getLastSelection();
+      const { folderId, noteId } = pickInitialSelection(noteData, folderData, saved);
+      setActiveFolderId(folderId);
+      if (!noteId) return;
+      setActiveNoteId(noteId);
       setMobilePanel('editor');
     });
     return () => {
       cancelled = true;
     };
-  }, [loadNotes]);
-
-  const loadFolders = useCallback(async () => {
-    const data = await folderApi.list();
-    setFolders(data);
-  }, []);
+  }, [loadNotes, loadFolders]);
 
   useEffect(() => {
-    loadFolders();
-  }, [loadFolders]);
+    if (!selectionRestored) return;
+    const selection = { folderId: activeFolderId, noteId: activeNoteId };
+    saveLastSelection(selection);
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${selectionToSearch(selection)}`,
+    );
+  }, [selectionRestored, activeFolderId, activeNoteId]);
+
+  // Another tab may have changed notes/folders. Side-by-side windows stay "visible", so
+  // `focus` catches switching windows and `visibilitychange` catches switching tabs/apps.
+  // Only the lists refresh — the open note is left alone so in-progress edits aren't
+  // disturbed (same-note conflicts: #51).
+  useEffect(() => {
+    const refreshLists = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadNotes().catch(() => {});
+      loadFolders().catch(() => {});
+    };
+    window.addEventListener('focus', refreshLists);
+    document.addEventListener('visibilitychange', refreshLists);
+    return () => {
+      window.removeEventListener('focus', refreshLists);
+      document.removeEventListener('visibilitychange', refreshLists);
+    };
+  }, [loadNotes, loadFolders]);
+
+  // A refresh can reveal the selected folder was deleted elsewhere: fall back to All Notes
+  // instead of filtering by (and creating notes in) a folder that no longer exists.
+  useEffect(() => {
+    if (!selectionRestored || activeFolderId === null) return;
+    if (!folders.some((f) => f.id === activeFolderId)) setActiveFolderId(null);
+  }, [selectionRestored, folders, activeFolderId]);
 
   // Fetch full note (with content) when selection changes
   useEffect(() => {
@@ -331,8 +391,25 @@ export default function MainPage() {
     }
   };
 
+  // Save/move responses can arrive after the user has opened another note (the previous
+  // editor's request queue still calls this), so read the *current* selection via refs:
+  // a late response only updates the list, never the open editor or the folder view.
   const handleUpdateNoteLocally = (updatedNote: Note) => {
+    const isOpen = updatedNote.id === activeNoteIdRef.current;
+    const viewedFolderId = activeFolderIdRef.current;
+    const previousFolderId = notesRef.current.find((n) => n.id === updatedNote.id)?.folderId;
+    // The open note was just moved out of the folder being viewed: follow it, so the
+    // list, editor, and URL stay consistent (otherwise a reload would open another note).
+    if (
+      isOpen &&
+      viewedFolderId !== null &&
+      previousFolderId === viewedFolderId &&
+      updatedNote.folderId !== viewedFolderId
+    ) {
+      setActiveFolderId(updatedNote.folderId);
+    }
     setNotes((prev) => sortNotes(prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))));
+    if (!isOpen) return;
     setActiveNote(updatedNote);
     setActiveNoteStatus('ready');
   };
@@ -406,15 +483,21 @@ export default function MainPage() {
     }
   }, [viewportTier]);
 
-  const handleSelectFolderMobile = useCallback((id: string | null) => {
-    setActiveFolderId(id);
-    setShowFolders(false);
-  }, []);
+  const handleSelectFolderMobile = useCallback(
+    (id: string | null) => {
+      selectFolder(id);
+      setShowFolders(false);
+    },
+    [selectFolder],
+  );
 
-  const handleSelectFolderOverlay = useCallback((id: string | null) => {
-    setActiveFolderId(id);
-    setFolderOverlayOpen(false);
-  }, []);
+  const handleSelectFolderOverlay = useCallback(
+    (id: string | null) => {
+      selectFolder(id);
+      setFolderOverlayOpen(false);
+    },
+    [selectFolder],
+  );
 
   const activeFolderName = activeFolderId
     ? (folders.find((f) => f.id === activeFolderId)?.name ?? 'All Notes')
@@ -494,11 +577,7 @@ export default function MainPage() {
         {viewportTier === 'desktop' && !folderCollapsed && (
           <>
             <div style={{ width: folderWidth }} className="h-full shrink-0">
-              <FolderSidebar
-                {...folderSidebarProps}
-                onSelectFolder={setActiveFolderId}
-                variant="pane"
-              />
+              <FolderSidebar {...folderSidebarProps} onSelectFolder={selectFolder} variant="pane" />
             </div>
             <ResizeHandle
               onResize={(dx) =>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { deriveTitleFromText, DERIVED_TITLE_MAX_CHARS } from './note-title';
+import { deriveTitleFromText, DERIVED_TITLE_MAX_CHARS, markdownWithTitle } from './note-title';
 
 describe('deriveTitleFromText', () => {
   test('returns empty string for empty text', () => {
@@ -35,5 +35,53 @@ describe('deriveTitleFromText', () => {
     expect(result).toBe('a'.repeat(DERIVED_TITLE_MAX_CHARS - 1) + '😀');
     // Confirm no lone surrogate was produced
     expect(result).not.toMatch(/[\uD800-\uDFFF]/u);
+  });
+});
+
+describe('markdownWithTitle', () => {
+  test('prepends a typed title as an H1', () => {
+    expect(markdownWithTitle('Plan', 'body text')).toBe('# Plan\n\nbody text');
+  });
+
+  test('leaves content alone when there is no title', () => {
+    expect(markdownWithTitle('  ', 'body text')).toBe('body text');
+  });
+
+  test('skips a title that was derived from the body', () => {
+    const content = 'hello world this is a test note';
+    expect(markdownWithTitle(deriveTitleFromText(content), content)).toBe(content);
+  });
+
+  test('skips when the body already opens with the same heading', () => {
+    expect(markdownWithTitle('Plan', '\n## Plan\n\nbody')).toBe('\n## Plan\n\nbody');
+  });
+
+  test('skips when the body opens with the same setext heading', () => {
+    expect(markdownWithTitle('Plan', 'Plan\n====\n\nbody')).toBe('Plan\n====\n\nbody');
+    expect(markdownWithTitle('Plan', 'Plan\n----\n\nbody')).toBe('Plan\n----\n\nbody');
+  });
+
+  test('ignores inline formatting and closing hashes in the opening heading', () => {
+    expect(markdownWithTitle('Plan', '## **Plan**\n\nbody')).toBe('## **Plan**\n\nbody');
+    expect(markdownWithTitle('Plan', '# Plan #\n\nbody')).toBe('# Plan #\n\nbody');
+  });
+
+  test('treats a 4-space-indented opening line as code, not a heading', () => {
+    expect(markdownWithTitle('Plan', '    # Plan\n\nbody')).toBe('# Plan\n\n    # Plan\n\nbody');
+  });
+
+  test('accepts up to 3 spaces of heading indent and leading blank lines', () => {
+    expect(markdownWithTitle('Plan', '   # Plan\n\nbody')).toBe('   # Plan\n\nbody');
+    expect(markdownWithTitle('Plan', '\n\n# Plan\n\nbody')).toBe('\n\n# Plan\n\nbody');
+  });
+
+  test('escapes Markdown syntax in the title so the heading shows it literally', () => {
+    expect(markdownWithTitle('Plan #', 'body')).toBe('# Plan \\#\n\nbody');
+    expect(markdownWithTitle('*draft* [v2]', 'body')).toBe('# \\*draft\\* \\[v2\\]\n\nbody');
+    expect(markdownWithTitle('Q3-plan', 'body')).toBe('# Q3-plan\n\nbody');
+  });
+
+  test('keeps the title when the opening heading differs', () => {
+    expect(markdownWithTitle('Plan', '# Other\n\nbody')).toBe('# Plan\n\n# Other\n\nbody');
   });
 });

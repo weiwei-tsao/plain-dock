@@ -15,6 +15,7 @@ import type { SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
 import { detectTerminalTable } from '@/lib/markdown/terminal-table';
 import { markdownToPlainText } from '@/lib/markdown/text-projection';
+import { markdownWithTitle } from '@/lib/note-title';
 import {
   toggleInlineMark,
   toggleLinePrefix,
@@ -36,6 +37,7 @@ import {
   Pencil,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   MoreHorizontal,
   Folder as FolderIcon,
@@ -69,19 +71,22 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
   });
 }
 
+const MOVE_MENU_WIDTH = 176; // w-44
+
 function sanitizeFilename(title: string): string {
   const cleaned = title.trim().replace(/[\\/:*?"<>|]/g, '-');
   return cleaned || 'untitled';
 }
 
-function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain' });
+function downloadMarkdownFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in Safari
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // CJK scripts have no spaces between words, so a plain whitespace split undercounts
@@ -126,7 +131,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [content, setContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   // Header row scrolls horizontally (overflow-x-auto) on narrow panes, which forces
   // overflow-y to clip too — so these dropdowns are portaled to <body> and positioned
@@ -134,8 +138,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [overflowMenuPos, setOverflowMenuPos] = useState<{ top: number; right: number } | null>(
     null,
   );
-  const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const [exportMenuPos, setExportMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
@@ -318,8 +321,21 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   // that a pending debounced save hasn't flushed yet (see design spec).
   const handleMoveToFolder = (folderId: string | null) => {
     setShowMoveMenu(false);
-    setShowOverflowMenu(false);
     if (folderId !== note.folderId) persistChange({ folderId });
+  };
+
+  const currentFolderName = folders.find((f) => f.id === note.folderId)?.name ?? 'All Notes';
+
+  const toggleMoveMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setShowMoveMenu((v) => {
+      if (!v) {
+        // Keep the menu on screen whether the chip sits at the left (phone) or right (desktop)
+        const left = Math.min(rect.left, window.innerWidth - MOVE_MENU_WIDTH - 8);
+        setMoveMenuPos({ top: rect.bottom + 4, left: Math.max(8, left) });
+      }
+      return !v;
+    });
   };
 
   // Project the current draft, including edits whose autosave is still pending.
@@ -330,19 +346,18 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(displayText);
+      await navigator.clipboard.writeText(content);
       setToast({ message: 'Copied!', variant: 'success' });
     } catch {
       setToast({ message: 'Clipboard access denied.', variant: 'error' });
     }
   };
 
-  const handleExportTxt = () => {
-    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, displayText);
-  };
-
-  const handleExportMd = () => {
-    downloadTextFile(`${sanitizeFilename(localTitle)}.md`, content);
+  const handleDownload = () => {
+    downloadMarkdownFile(
+      `${sanitizeFilename(localTitle)}.md`,
+      markdownWithTitle(localTitle, content),
+    );
   };
 
   return (
@@ -350,7 +365,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       {/* Editor Header */}
       <header className="sticky top-0 z-10 border-b border-zinc-800 bg-black/50 backdrop-blur-md">
         {/* Top row: back button (phone) + title + desktop controls */}
-        <div className="flex items-center gap-2 overflow-x-auto px-4 py-3 md:px-6 md:py-4">
+        <div className="@container flex items-center gap-2 overflow-x-auto px-4 py-3 md:px-6 md:py-4">
           <button
             onClick={() => onBack?.()}
             className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white md:hidden"
@@ -405,10 +420,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   setShowOverflowMenu((v) => {
-                    if (v) {
-                      setShowExportMenu(false);
-                      setShowMoveMenu(false);
-                    } else {
+                    if (!v) {
                       setOverflowMenuPos({
                         top: rect.bottom + 4,
                         right: window.innerWidth - rect.right,
@@ -430,11 +442,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   <>
                     <div
                       className="fixed inset-0 z-40"
-                      onClick={() => {
-                        setShowOverflowMenu(false);
-                        setShowExportMenu(false);
-                        setShowMoveMenu(false);
-                      }}
+                      onClick={() => setShowOverflowMenu(false)}
                     />
                     <div
                       className="fixed z-50 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
@@ -443,7 +451,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                       <button
                         onClick={() => {
                           copyToClipboard();
-                          setShowExportMenu(false);
                           setShowOverflowMenu(false);
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
@@ -452,81 +459,19 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                         Copy
                       </button>
                       <button
-                        onClick={() => setShowMoveMenu((v) => !v)}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <FolderIcon className="h-4 w-4" />
-                        Move to
-                      </button>
-                      {showMoveMenu && (
-                        <div className="max-h-48 overflow-y-auto border-y border-zinc-800 bg-black/20 py-1">
-                          <button
-                            onClick={() => handleMoveToFolder(null)}
-                            className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
-                              note.folderId === null
-                                ? 'text-indigo-400'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            All Notes
-                          </button>
-                          {folders.map((folder) => (
-                            <button
-                              key={folder.id}
-                              onClick={() => handleMoveToFolder(folder.id)}
-                              className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
-                                note.folderId === folder.id
-                                  ? 'text-indigo-400'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              <span className="truncate">{folder.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <button
-                        onClick={() => setShowExportMenu((v) => !v)}
+                        onClick={() => {
+                          handleDownload();
+                          setShowOverflowMenu(false);
+                        }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
                       >
                         <Download className="h-4 w-4" />
-                        Export
+                        Download
                       </button>
-                      {showExportMenu && (
-                        <div className="border-y border-zinc-800 bg-black/20 py-1">
-                          <button
-                            onClick={() => {
-                              handleExportTxt();
-                              setShowExportMenu(false);
-                              setShowOverflowMenu(false);
-                            }}
-                            className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                          >
-                            <span>Text</span>
-                            <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                              TXT
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExportMd();
-                              setShowExportMenu(false);
-                              setShowOverflowMenu(false);
-                            }}
-                            className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                          >
-                            <span>Markdown</span>
-                            <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                              MD
-                            </span>
-                          </button>
-                        </div>
-                      )}
                       <div className="my-1 border-t border-zinc-800" />
                       <button
                         onClick={() => {
                           setShowDeleteConfirm(true);
-                          setShowExportMenu(false);
                           setShowOverflowMenu(false);
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-400/10"
@@ -554,6 +499,19 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               </span>
             </div>
 
+            {/* The folder name only shows when the header row is wide (≥ @2xl); narrower
+                editors get an icon-only chip so the title keeps its width. */}
+            <button
+              onClick={toggleMoveMenu}
+              className="flex max-w-48 items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              title={`${currentFolderName} — Move to folder`}
+              aria-label={`Folder: ${currentFolderName}. Move to folder`}
+            >
+              <FolderIcon className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate @2xl:inline">{currentFolderName}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            </button>
+
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
@@ -563,65 +521,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             >
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
-
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setShowExportMenu(false);
-                  setShowMoveMenu((v) => {
-                    if (!v) {
-                      setMoveMenuPos({
-                        top: rect.bottom + 4,
-                        right: window.innerWidth - rect.right,
-                      });
-                    }
-                    return !v;
-                  });
-                }}
-                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-                title="Move to folder"
-              >
-                <FolderIcon className="h-4 w-4" />
-              </button>
-
-              {showMoveMenu &&
-                moveMenuPos &&
-                createPortal(
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
-                    <div
-                      className="fixed z-50 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
-                      style={{ top: moveMenuPos.top, right: moveMenuPos.right }}
-                    >
-                      <button
-                        onClick={() => handleMoveToFolder(null)}
-                        className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
-                          note.folderId === null
-                            ? 'text-indigo-400'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        All Notes
-                      </button>
-                      {folders.map((folder) => (
-                        <button
-                          key={folder.id}
-                          onClick={() => handleMoveToFolder(folder.id)}
-                          className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
-                            note.folderId === folder.id
-                              ? 'text-indigo-400'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <span className="truncate">{folder.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>,
-                  document.body,
-                )}
-            </div>
 
             <button
               type="button"
@@ -640,70 +539,20 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={copyToClipboard}
               className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-              title="Copy"
+              title="Copy Markdown"
+              aria-label="Copy Markdown"
             >
               <Copy className="h-4 w-4" />
             </button>
 
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setShowMoveMenu(false);
-                  setShowExportMenu((v) => {
-                    if (!v) {
-                      setExportMenuPos({
-                        top: rect.bottom + 4,
-                        right: window.innerWidth - rect.right,
-                      });
-                    }
-                    return !v;
-                  });
-                }}
-                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-                title="Export"
-              >
-                <Download className="h-4 w-4" />
-              </button>
-
-              {showExportMenu &&
-                exportMenuPos &&
-                createPortal(
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-                    <div
-                      className="fixed z-50 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
-                      style={{ top: exportMenuPos.top, right: exportMenuPos.right }}
-                    >
-                      <button
-                        onClick={() => {
-                          handleExportTxt();
-                          setShowExportMenu(false);
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <span>Text</span>
-                        <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                          TXT
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleExportMd();
-                          setShowExportMenu(false);
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <span>Markdown</span>
-                        <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                          MD
-                        </span>
-                      </button>
-                    </div>
-                  </>,
-                  document.body,
-                )}
-            </div>
+            <button
+              onClick={handleDownload}
+              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+              title="Download Markdown"
+              aria-label="Download Markdown"
+            >
+              <Download className="h-4 w-4" />
+            </button>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -714,6 +563,55 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             </button>
           </div>
         </div>
+
+        {/* Phone: the header row has no room, so the folder chip gets its own line */}
+        <div className="-mt-2 px-4 pb-2 md:hidden">
+          <button
+            onClick={toggleMoveMenu}
+            className="flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+            title="Move to folder"
+            aria-label={`Folder: ${currentFolderName}. Move to folder`}
+          >
+            <FolderIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{currentFolderName}</span>
+            <ChevronDown className="h-3 w-3 shrink-0" />
+          </button>
+        </div>
+
+        {showMoveMenu &&
+          moveMenuPos &&
+          createPortal(
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
+              <div
+                className="fixed z-50 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
+                style={{ top: moveMenuPos.top, left: moveMenuPos.left }}
+              >
+                <button
+                  onClick={() => handleMoveToFolder(null)}
+                  className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                    note.folderId === null ? 'text-indigo-400' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  All Notes
+                </button>
+                {folders.map((folder) => (
+                  <button
+                    key={folder.id}
+                    onClick={() => handleMoveToFolder(folder.id)}
+                    className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                      note.folderId === folder.id
+                        ? 'text-indigo-400'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="truncate">{folder.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body,
+          )}
       </header>
 
       {/* Formatting Toolbar */}
