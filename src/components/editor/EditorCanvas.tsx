@@ -365,7 +365,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
       {/* Editor Header */}
       <header className="sticky top-0 z-10 border-b border-zinc-800 bg-black/50 backdrop-blur-md">
         {/* Top row: back button (phone) + title + desktop controls */}
-        <div className="flex items-center gap-2 overflow-x-auto px-4 py-3 md:px-6 md:py-4">
+        <div className="@container flex items-center gap-2 overflow-x-auto px-4 py-3 md:px-6 md:py-4">
           <button
             onClick={() => onBack?.()}
             className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white md:hidden"
@@ -499,6 +499,19 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               </span>
             </div>
 
+            {/* The folder name only shows when the header row is wide (≥ @2xl); narrower
+                editors get an icon-only chip so the title keeps its width. */}
+            <button
+              onClick={toggleMoveMenu}
+              className="flex max-w-48 items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              title={`${currentFolderName} — Move to folder`}
+              aria-label={`Folder: ${currentFolderName}. Move to folder`}
+            >
+              <FolderIcon className="h-4 w-4 shrink-0" />
+              <span className="hidden truncate @2xl:inline">{currentFolderName}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            </button>
+
             <button
               onClick={handleTogglePin}
               className={`rounded-lg p-2 transition-all ${note.isPinned ? 'bg-indigo-400/10 text-indigo-400' : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'}`}
@@ -551,8 +564,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           </div>
         </div>
 
-        {/* Folder chip on its own line under the title: the header row has no room for it */}
-        <div className="-mt-2 px-4 pb-2 md:-mt-3 md:pb-3">
+        {/* Phone: the header row has no room, so the folder chip gets its own line */}
+        <div className="-mt-2 px-4 pb-2 md:hidden">
           <button
             onClick={toggleMoveMenu}
             className="flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
