@@ -510,17 +510,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             </button>
 
             <button
-              onClick={toggleMoveMenu}
-              className="flex max-w-48 items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-              title="Move to folder"
-              aria-label={`Folder: ${currentFolderName}. Move to folder`}
-            >
-              <FolderIcon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{currentFolderName}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-            </button>
-
-            <button
               type="button"
               onClick={togglePreview}
               aria-label={previewMode ? 'Edit' : 'Preview'}
@@ -562,8 +551,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
           </div>
         </div>
 
-        {/* Phone: the header row has no room, so the folder chip gets its own line */}
-        <div className="-mt-2 px-4 pb-2 md:hidden">
+        {/* Folder chip on its own line under the title: the header row has no room for it */}
+        <div className="-mt-2 px-4 pb-2 md:-mt-3 md:pb-3">
           <button
             onClick={toggleMoveMenu}
             className="flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
