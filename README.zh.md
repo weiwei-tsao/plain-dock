@@ -1,21 +1,21 @@
 # PlainDock
 
-一款自托管的极简双模式笔记应用。每条笔记独立运行于 **PLAIN**（纯文本 `<textarea>`）或 **RICH**（基于 CodeMirror 的 Markdown 源码编辑，带语法高亮）模式——两种模式共享同一份规范化的 Markdown/纯文本 `content`，因此模式切换是无损的。粘贴内容始终以纯文本插入，剪贴板中的 HTML 会被有意忽略。完整支持手机、平板和桌面三种屏幕尺寸。
+一款自托管的极简 Markdown 笔记应用。所有笔记都在同一个 CodeMirror Markdown 编辑器中编辑，支持编辑/预览切换和标题大纲，内容以规范化的 Markdown 存储。粘贴内容始终以纯文本插入，剪贴板中的 HTML 会被有意忽略。完整支持手机、平板和桌面三种屏幕尺寸。
 
 [English](README.md)
 
 ## 功能特性
 
-- **双模式编辑** — 每条笔记独立切换纯文本（`<textarea>`）或基于 CodeMirror 的 Markdown 源码编辑模式；两种模式共享同一份内容，切换无损、无需确认弹窗
+- **Markdown 编辑与预览** — 基于 CodeMirror 6 的 Markdown 编辑器，带格式化工具栏和编辑/预览切换；预览渲染未保存的草稿（笔记中的原始 HTML 按文本显示），标题大纲可跳转到对应章节
+- **文件夹** — 在「All Notes」之外用文件夹整理笔记；可直接新建、重命名、删除文件夹（删除文件夹后，其中的笔记回到 All Notes）
 - **纯文本粘贴** — 粘贴内容始终以纯文本插入，剪贴板中的 HTML 会被有意忽略
 - **自动保存** — 1 秒防抖延迟，请求串行队列防止并发写入冲突
 - **置顶与搜索** — 重要笔记置顶；搜索同时匹配标题和正文内容
 - **复制与下载** — 复制笔记的 Markdown 到剪贴板；下载为 `.md` 文件，标题作为开头的 `# H1`
 - **多标签页与链接** — 每个标签页的文件夹/笔记记录在 URL 中，刷新后恢复；右键（或 Cmd/Ctrl/中键点击）笔记或文件夹可在新标签页打开；切回窗口时列表自动刷新
-- **移动端响应式** — 手机（< 768px）单面板堆叠导航，平板（768–1023px）窄侧栏布局，桌面（1024px+）完整双栏布局
-- **侧栏可折叠** — 平板/桌面支持折叠展开；手机通过返回按钮导航，无折叠按钮
+- **响应式三栏布局** — 桌面（1024px+）为 文件夹 | 笔记列表 | 编辑器 三栏，各栏宽度可拖动调整并记住，文件夹栏可折叠；平板（768–1023px）为 笔记列表 + 编辑器 两栏，文件夹以浮层打开；手机（< 768px）为 笔记列表 → 文件夹 → 编辑器 的堆叠导航
 - **密码保护** — 单一共享密码，JWT 会话存储于 httpOnly Cookie（有效期 30 天）
-- **Edge 中间件** — 在 Edge Runtime 中进行轻量级 JWT 过期检查；完整 HMAC-SHA256 验证在 API 路由中执行
+- **Edge 中间件** — 在 Edge Runtime 中用 Web Crypto API 对每个请求验证会话 JWT 的 HMAC-SHA256 签名与过期时间
 - **SQLite 兼容存储** — 本地和 Docker 使用文件 SQLite；Vercel 可使用 Turso/libSQL
 - **Docker 就绪** — 多阶段 Dockerfile，Next.js 独立输出；容器启动时自动执行数据库迁移
 
@@ -131,6 +131,7 @@ Vercel 的 Serverless 函数不能把本地 SQLite 文件当作持久存储。�
    ```bash
    turso db shell your-database < prisma/migrations/20260214025810_init/migration.sql
    turso db shell your-database < prisma/migrations/20260628035117_empty_title_default/migration.sql
+   turso db shell your-database < prisma/migrations/20260719031554_add_note_folders/migration.sql
    ```
 
    以后每次新增 `prisma/migrations/*/migration.sql` 后，都要先用同样方式应用到 Turso，再部署依赖这些迁移的代码。
@@ -153,6 +154,7 @@ Vercel 的 Serverless 函数不能把本地 SQLite 文件当作持久存储。�
 | `npm run docker:sync-from-turso` | 手动用已备份的 Turso 快照替换 Docker SQLite 数据 |
 | `npm test` | 运行 Vitest 测试套件 |
 | `npm run test:watch` | 以监听模式运行 Vitest |
+| `npm run test:e2e` | 运行 Playwright E2E 测试（准备步骤见 `e2e/README.md`） |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npx prisma migrate dev` | 创建并应用数据库迁移 |
 | `npx prisma studio` | 打开数据库可视化界面 |
@@ -166,32 +168,37 @@ Vercel 的 Serverless 函数不能把本地 SQLite 文件当作持久存储。�
         ├── /                 主编辑页
         └── /api/
               ├── auth/       登录 · 登出
-              └── notes/      笔记增删改查 + 详情接口
+              ├── notes/      笔记增删改查 + 详情接口
+              └── folders/    文件夹列表（含笔记数）· 新建 · 重命名 · 删除
 
 客户端组件（src/components/）
-  ├── Sidebar                 笔记列表、搜索、置顶标识
+  ├── sidebar/
+  │     ├── FolderSidebar     All Notes + 文件夹，行内新建/重命名/删除
+  │     ├── NotesList         笔记列表、搜索、置顶标识、下拉刷新
+  │     └── ResizeHandle      栏间可拖动分隔条
   └── editor/
-        ├── EditorCanvas      双模式编辑器、自动保存、粘贴处理
-        ├── MarkdownEditor    RICH 模式的 CodeMirror 6 封装
+        ├── EditorCanvas      编辑器外壳：编辑/预览切换、自动保存、粘贴处理、笔记操作
+        ├── MarkdownEditor    CodeMirror 6 封装
+        ├── MarkdownPreview   预览面板（唯一的 HTML 渲染边界）+ MarkdownOutline
         └── RichToolbar       Markdown 格式化工具栏
 
 服务端库（src/lib/）
   ├── db.ts                   Prisma 单例；按 DATABASE_URL 使用文件 SQLite 或 Turso/libSQL
   ├── auth.ts                 JWT 签发与验证（仅服务端）
   ├── serialize.ts            Prisma 类型转客户端类型（仅服务端）
-  └── markdown/               两种编辑模式共用的纯文本处理函数（粘贴检测、纯文本投影、格式化、搜索）
+  └── markdown/               共用的 Markdown 处理函数（粘贴检测、纯文本投影、格式化、搜索、预览 HTML）
 
 中间件（src/middleware.ts）
-  └── Edge Runtime — 对每个请求进行 JWT 结构与过期检查
+  └── Edge Runtime — 对每个请求验证 JWT 的 HMAC-SHA256 签名与过期时间
 ```
 
 ### 响应式布局
 
 | 断点 | 前缀 | 宽度 | 布局行为 |
 |------|------|------|---------|
-| 手机 | 默认 | < 768px | 单面板：笔记列表或编辑器，同一时间只显示一个 |
-| 平板 | `md:` | 768–1023px | 双栏：侧栏宽度 224px，可折叠 |
-| 桌面 | `lg:` | 1024px+ | 双栏：侧栏宽度 320px，可折叠 |
+| 手机 | 默认 | < 768px | 堆叠导航：笔记列表 → 文件夹（全屏）→ 编辑器，同一时间只显示一个 |
+| 平板 | `md:` | 768–1023px | 两栏：笔记列表 + 编辑器；文件夹栏自动收起，以浮层打开 |
+| 桌面 | `lg:` | 1024px+ | 三栏：文件夹 + 笔记列表 + 编辑器，各栏可拖动调整宽度，文件夹栏可折叠 |
 
 ## 技术栈
 
@@ -199,6 +206,6 @@ Vercel 的 Serverless 函数不能把本地 SQLite 文件当作持久存储。�
 - **React 19** + **TypeScript**（strict 模式）
 - **Prisma** + **SQLite/libSQL** — 本地和 Docker 使用文件 SQLite，Vercel 使用 Turso
 - **Tailwind CSS v4**（PostCSS 插件，无配置文件）
-- **CodeMirror 6** — RICH 模式的 Markdown 源码编辑器，带语法高亮
+- **CodeMirror 6** — Markdown 编辑器，带语法高亮
 - **Lucide React** — 图标库
 - **jsonwebtoken** — JWT 签发与验证
