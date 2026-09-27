@@ -222,7 +222,10 @@ export default function MainPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([loadNotes(), loadFolders()]).then(([noteData, folderData]) => {
+    // A failed folders request must not block opening a note: treat it as no folders
+    // (a saved folder then falls back to All Notes).
+    const folders = loadFolders().catch(() => []);
+    Promise.all([loadNotes(), folders]).then(([noteData, folderData]) => {
       if (cancelled) return;
       selectionRestoredRef.current = true;
       if (activeNoteIdRef.current) return;
