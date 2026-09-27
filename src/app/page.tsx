@@ -213,8 +213,14 @@ export default function MainPage() {
     return data;
   }, []);
 
+  // Current-selection refs for async callbacks (initial restore, late save responses)
+  // that must not act on the state captured when they were created.
   const activeNoteIdRef = useRef(activeNoteId);
   activeNoteIdRef.current = activeNoteId;
+  const activeFolderIdRef = useRef(activeFolderId);
+  activeFolderIdRef.current = activeFolderId;
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
 
   // Selection lives in the URL (per tab, survives reload); localStorage only seeds a bare `/`.
   // Don't persist the empty initial selection over the saved one before it's restored.
@@ -385,19 +391,25 @@ export default function MainPage() {
     }
   };
 
+  // Save/move responses can arrive after the user has opened another note (the previous
+  // editor's request queue still calls this), so read the *current* selection via refs:
+  // a late response only updates the list, never the open editor or the folder view.
   const handleUpdateNoteLocally = (updatedNote: Note) => {
+    const isOpen = updatedNote.id === activeNoteIdRef.current;
+    const viewedFolderId = activeFolderIdRef.current;
+    const previousFolderId = notesRef.current.find((n) => n.id === updatedNote.id)?.folderId;
     // The open note was just moved out of the folder being viewed: follow it, so the
     // list, editor, and URL stay consistent (otherwise a reload would open another note).
-    const previousFolderId = notes.find((n) => n.id === updatedNote.id)?.folderId;
     if (
-      updatedNote.id === activeNoteId &&
-      activeFolderId !== null &&
-      previousFolderId === activeFolderId &&
-      updatedNote.folderId !== activeFolderId
+      isOpen &&
+      viewedFolderId !== null &&
+      previousFolderId === viewedFolderId &&
+      updatedNote.folderId !== viewedFolderId
     ) {
       setActiveFolderId(updatedNote.folderId);
     }
     setNotes((prev) => sortNotes(prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))));
+    if (!isOpen) return;
     setActiveNote(updatedNote);
     setActiveNoteStatus('ready');
   };
