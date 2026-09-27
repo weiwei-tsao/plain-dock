@@ -15,6 +15,7 @@ import type { SaveState } from '@/types';
 import { noteApi } from '@/lib/api-client';
 import { detectTerminalTable } from '@/lib/markdown/terminal-table';
 import { markdownToPlainText } from '@/lib/markdown/text-projection';
+import { markdownWithTitle } from '@/lib/note-title';
 import {
   toggleInlineMark,
   toggleLinePrefix,
@@ -74,14 +75,15 @@ function sanitizeFilename(title: string): string {
   return cleaned || 'untitled';
 }
 
-function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain' });
+function downloadMarkdownFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in Safari
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // CJK scripts have no spaces between words, so a plain whitespace split undercounts
@@ -126,7 +128,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [content, setContent] = useState(note.content);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   // Header row scrolls horizontally (overflow-x-auto) on narrow panes, which forces
   // overflow-y to clip too — so these dropdowns are portaled to <body> and positioned
@@ -135,7 +136,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     null,
   );
   const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const [exportMenuPos, setExportMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
@@ -337,12 +337,11 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
     }
   };
 
-  const handleExportTxt = () => {
-    downloadTextFile(`${sanitizeFilename(localTitle)}.txt`, displayText);
-  };
-
-  const handleExportMd = () => {
-    downloadTextFile(`${sanitizeFilename(localTitle)}.md`, content);
+  const handleDownload = () => {
+    downloadMarkdownFile(
+      `${sanitizeFilename(localTitle)}.md`,
+      markdownWithTitle(localTitle, content),
+    );
   };
 
   return (
@@ -406,7 +405,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   const rect = e.currentTarget.getBoundingClientRect();
                   setShowOverflowMenu((v) => {
                     if (v) {
-                      setShowExportMenu(false);
                       setShowMoveMenu(false);
                     } else {
                       setOverflowMenuPos({
@@ -432,7 +430,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                       className="fixed inset-0 z-40"
                       onClick={() => {
                         setShowOverflowMenu(false);
-                        setShowExportMenu(false);
                         setShowMoveMenu(false);
                       }}
                     />
@@ -443,7 +440,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                       <button
                         onClick={() => {
                           copyToClipboard();
-                          setShowExportMenu(false);
                           setShowOverflowMenu(false);
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
@@ -486,47 +482,19 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                         </div>
                       )}
                       <button
-                        onClick={() => setShowExportMenu((v) => !v)}
+                        onClick={() => {
+                          handleDownload();
+                          setShowOverflowMenu(false);
+                        }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
                       >
                         <Download className="h-4 w-4" />
-                        Export
+                        Download
                       </button>
-                      {showExportMenu && (
-                        <div className="border-y border-zinc-800 bg-black/20 py-1">
-                          <button
-                            onClick={() => {
-                              handleExportTxt();
-                              setShowExportMenu(false);
-                              setShowOverflowMenu(false);
-                            }}
-                            className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                          >
-                            <span>Text</span>
-                            <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                              TXT
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              handleExportMd();
-                              setShowExportMenu(false);
-                              setShowOverflowMenu(false);
-                            }}
-                            className="flex w-full items-center justify-between px-11 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                          >
-                            <span>Markdown</span>
-                            <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                              MD
-                            </span>
-                          </button>
-                        </div>
-                      )}
                       <div className="my-1 border-t border-zinc-800" />
                       <button
                         onClick={() => {
                           setShowDeleteConfirm(true);
-                          setShowExportMenu(false);
                           setShowOverflowMenu(false);
                         }}
                         className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 transition-colors hover:bg-red-400/10"
@@ -568,7 +536,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <button
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setShowExportMenu(false);
                   setShowMoveMenu((v) => {
                     if (!v) {
                       setMoveMenuPos({
@@ -645,65 +612,14 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <Copy className="h-4 w-4" />
             </button>
 
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setShowMoveMenu(false);
-                  setShowExportMenu((v) => {
-                    if (!v) {
-                      setExportMenuPos({
-                        top: rect.bottom + 4,
-                        right: window.innerWidth - rect.right,
-                      });
-                    }
-                    return !v;
-                  });
-                }}
-                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-                title="Export"
-              >
-                <Download className="h-4 w-4" />
-              </button>
-
-              {showExportMenu &&
-                exportMenuPos &&
-                createPortal(
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
-                    <div
-                      className="fixed z-50 w-36 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
-                      style={{ top: exportMenuPos.top, right: exportMenuPos.right }}
-                    >
-                      <button
-                        onClick={() => {
-                          handleExportTxt();
-                          setShowExportMenu(false);
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <span>Text</span>
-                        <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                          TXT
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          handleExportMd();
-                          setShowExportMenu(false);
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <span>Markdown</span>
-                        <span className="rounded-sm border border-current px-1 text-[9px] font-black">
-                          MD
-                        </span>
-                      </button>
-                    </div>
-                  </>,
-                  document.body,
-                )}
-            </div>
+            <button
+              onClick={handleDownload}
+              className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+              title="Download Markdown"
+              aria-label="Download Markdown"
+            >
+              <Download className="h-4 w-4" />
+            </button>
 
             <button
               onClick={() => setShowDeleteConfirm(true)}

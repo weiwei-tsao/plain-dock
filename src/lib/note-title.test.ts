@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { deriveTitleFromText, DERIVED_TITLE_MAX_CHARS } from './note-title';
+import { deriveTitleFromText, DERIVED_TITLE_MAX_CHARS, markdownWithTitle } from './note-title';
 
 describe('deriveTitleFromText', () => {
   test('returns empty string for empty text', () => {
@@ -35,5 +35,28 @@ describe('deriveTitleFromText', () => {
     expect(result).toBe('a'.repeat(DERIVED_TITLE_MAX_CHARS - 1) + '😀');
     // Confirm no lone surrogate was produced
     expect(result).not.toMatch(/[\uD800-\uDFFF]/u);
+  });
+});
+
+describe('markdownWithTitle', () => {
+  test('prepends a typed title as an H1', () => {
+    expect(markdownWithTitle('Plan', 'body text')).toBe('# Plan\n\nbody text');
+  });
+
+  test('leaves content alone when there is no title', () => {
+    expect(markdownWithTitle('  ', 'body text')).toBe('body text');
+  });
+
+  test('skips a title that was derived from the body', () => {
+    const content = 'hello world this is a test note';
+    expect(markdownWithTitle(deriveTitleFromText(content), content)).toBe(content);
+  });
+
+  test('skips when the body already opens with the same heading', () => {
+    expect(markdownWithTitle('Plan', '\n## Plan\n\nbody')).toBe('\n## Plan\n\nbody');
+  });
+
+  test('keeps the title when the opening heading differs', () => {
+    expect(markdownWithTitle('Plan', '# Other\n\nbody')).toBe('# Plan\n\n# Other\n\nbody');
   });
 });
