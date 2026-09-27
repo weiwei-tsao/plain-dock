@@ -279,6 +279,13 @@ export default function MainPage() {
     };
   }, [loadNotes, loadFolders]);
 
+  // A refresh can reveal the selected folder was deleted elsewhere: fall back to All Notes
+  // instead of filtering by (and creating notes in) a folder that no longer exists.
+  useEffect(() => {
+    if (!selectionRestored || activeFolderId === null) return;
+    if (!folders.some((f) => f.id === activeFolderId)) setActiveFolderId(null);
+  }, [selectionRestored, folders, activeFolderId]);
+
   // Fetch full note (with content) when selection changes
   useEffect(() => {
     if (!activeNoteId) {
