@@ -37,6 +37,7 @@ import {
   Pencil,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   MoreHorizontal,
   Folder as FolderIcon,
@@ -69,6 +70,8 @@ async function resizeImageToDataURL(file: File, maxDimension = 800): Promise<str
     img.src = objectUrl;
   });
 }
+
+const MOVE_MENU_WIDTH = 176; // w-44
 
 function sanitizeFilename(title: string): string {
   const cleaned = title.trim().replace(/[\\/:*?"<>|]/g, '-');
@@ -135,7 +138,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   const [overflowMenuPos, setOverflowMenuPos] = useState<{ top: number; right: number } | null>(
     null,
   );
-  const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const [moveMenuPos, setMoveMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     variant: 'success' | 'error' | 'info';
@@ -318,8 +321,21 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
   // that a pending debounced save hasn't flushed yet (see design spec).
   const handleMoveToFolder = (folderId: string | null) => {
     setShowMoveMenu(false);
-    setShowOverflowMenu(false);
     if (folderId !== note.folderId) persistChange({ folderId });
+  };
+
+  const currentFolderName = folders.find((f) => f.id === note.folderId)?.name ?? 'All Notes';
+
+  const toggleMoveMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setShowMoveMenu((v) => {
+      if (!v) {
+        // Keep the menu on screen whether the chip sits at the left (phone) or right (desktop)
+        const left = Math.min(rect.left, window.innerWidth - MOVE_MENU_WIDTH - 8);
+        setMoveMenuPos({ top: rect.bottom + 4, left: Math.max(8, left) });
+      }
+      return !v;
+    });
   };
 
   // Project the current draft, including edits whose autosave is still pending.
@@ -404,9 +420,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   setShowOverflowMenu((v) => {
-                    if (v) {
-                      setShowMoveMenu(false);
-                    } else {
+                    if (!v) {
                       setOverflowMenuPos({
                         top: rect.bottom + 4,
                         right: window.innerWidth - rect.right,
@@ -428,10 +442,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                   <>
                     <div
                       className="fixed inset-0 z-40"
-                      onClick={() => {
-                        setShowOverflowMenu(false);
-                        setShowMoveMenu(false);
-                      }}
+                      onClick={() => setShowOverflowMenu(false)}
                     />
                     <div
                       className="fixed z-50 w-44 rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
@@ -447,40 +458,6 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
                         <Copy className="h-4 w-4" />
                         Copy
                       </button>
-                      <button
-                        onClick={() => setShowMoveMenu((v) => !v)}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
-                      >
-                        <FolderIcon className="h-4 w-4" />
-                        Move to
-                      </button>
-                      {showMoveMenu && (
-                        <div className="max-h-48 overflow-y-auto border-y border-zinc-800 bg-black/20 py-1">
-                          <button
-                            onClick={() => handleMoveToFolder(null)}
-                            className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
-                              note.folderId === null
-                                ? 'text-indigo-400'
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            All Notes
-                          </button>
-                          {folders.map((folder) => (
-                            <button
-                              key={folder.id}
-                              onClick={() => handleMoveToFolder(folder.id)}
-                              className={`flex w-full items-center px-11 py-2 text-sm transition-colors hover:bg-zinc-800 ${
-                                note.folderId === folder.id
-                                  ? 'text-indigo-400'
-                                  : 'text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              <span className="truncate">{folder.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
                       <button
                         onClick={() => {
                           handleDownload();
@@ -532,63 +509,16 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
               <Pin className={`h-4 w-4 ${note.isPinned ? 'fill-current' : ''}`} />
             </button>
 
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setShowMoveMenu((v) => {
-                    if (!v) {
-                      setMoveMenuPos({
-                        top: rect.bottom + 4,
-                        right: window.innerWidth - rect.right,
-                      });
-                    }
-                    return !v;
-                  });
-                }}
-                className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-                title="Move to folder"
-              >
-                <FolderIcon className="h-4 w-4" />
-              </button>
-
-              {showMoveMenu &&
-                moveMenuPos &&
-                createPortal(
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
-                    <div
-                      className="fixed z-50 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
-                      style={{ top: moveMenuPos.top, right: moveMenuPos.right }}
-                    >
-                      <button
-                        onClick={() => handleMoveToFolder(null)}
-                        className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
-                          note.folderId === null
-                            ? 'text-indigo-400'
-                            : 'text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        All Notes
-                      </button>
-                      {folders.map((folder) => (
-                        <button
-                          key={folder.id}
-                          onClick={() => handleMoveToFolder(folder.id)}
-                          className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
-                            note.folderId === folder.id
-                              ? 'text-indigo-400'
-                              : 'text-zinc-400 hover:text-white'
-                          }`}
-                        >
-                          <span className="truncate">{folder.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>,
-                  document.body,
-                )}
-            </div>
+            <button
+              onClick={toggleMoveMenu}
+              className="flex max-w-48 items-center gap-1.5 rounded-lg px-2 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              title="Move to folder"
+              aria-label={`Folder: ${currentFolderName}. Move to folder`}
+            >
+              <FolderIcon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{currentFolderName}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            </button>
 
             <button
               type="button"
@@ -631,6 +561,55 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             </button>
           </div>
         </div>
+
+        {/* Phone: the header row has no room, so the folder chip gets its own line */}
+        <div className="-mt-2 px-4 pb-2 md:hidden">
+          <button
+            onClick={toggleMoveMenu}
+            className="flex max-w-full items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
+            title="Move to folder"
+            aria-label={`Folder: ${currentFolderName}. Move to folder`}
+          >
+            <FolderIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{currentFolderName}</span>
+            <ChevronDown className="h-3 w-3 shrink-0" />
+          </button>
+        </div>
+
+        {showMoveMenu &&
+          moveMenuPos &&
+          createPortal(
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMoveMenu(false)} />
+              <div
+                className="fixed z-50 max-h-64 w-44 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 py-1 shadow-xl"
+                style={{ top: moveMenuPos.top, left: moveMenuPos.left }}
+              >
+                <button
+                  onClick={() => handleMoveToFolder(null)}
+                  className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                    note.folderId === null ? 'text-indigo-400' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  All Notes
+                </button>
+                {folders.map((folder) => (
+                  <button
+                    key={folder.id}
+                    onClick={() => handleMoveToFolder(folder.id)}
+                    className={`flex w-full items-center px-4 py-2.5 text-sm transition-colors hover:bg-zinc-800 ${
+                      note.folderId === folder.id
+                        ? 'text-indigo-400'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="truncate">{folder.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>,
+            document.body,
+          )}
       </header>
 
       {/* Formatting Toolbar */}

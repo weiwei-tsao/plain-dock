@@ -367,6 +367,17 @@ export default function MainPage() {
   };
 
   const handleUpdateNoteLocally = (updatedNote: Note) => {
+    // The open note was just moved out of the folder being viewed: follow it, so the
+    // list, editor, and URL stay consistent (otherwise a reload would open another note).
+    const previousFolderId = notes.find((n) => n.id === updatedNote.id)?.folderId;
+    if (
+      updatedNote.id === activeNoteId &&
+      activeFolderId !== null &&
+      previousFolderId === activeFolderId &&
+      updatedNote.folderId !== activeFolderId
+    ) {
+      setActiveFolderId(updatedNote.folderId);
+    }
     setNotes((prev) => sortNotes(prev.map((n) => (n.id === updatedNote.id ? updatedNote : n))));
     setActiveNote(updatedNote);
     setActiveNoteStatus('ready');
