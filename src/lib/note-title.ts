@@ -11,6 +11,12 @@ export function deriveTitleFromText(text: string): string {
   return Array.from(collapsed).slice(0, DERIVED_TITLE_MAX_CHARS).join('');
 }
 
+// Backslash-escape only characters that would change how a plain title renders as a
+// heading (closing `#`, emphasis, code, links, HTML, strikethrough, entities).
+function escapeHeadingText(text: string): string {
+  return text.replace(/[\\`*_[\]<>#~&]/g, '\\$&');
+}
+
 // Markdown file for download: prepend the title as an H1 unless it adds nothing —
 // no title, a title derived from the body, or a body that already opens with it.
 export function markdownWithTitle(title: string, content: string): string {
@@ -24,5 +30,5 @@ export function markdownWithTitle(title: string, content: string): string {
   const isSetext = /^ {0,3}\S/.test(first) && /^ {0,3}(?:=+|-+)\s*$/.test(second);
   const headingText = markdownToPlainText(first.trim().replace(/\s+#+$/, '')).trim();
   if ((isAtx || isSetext) && headingText === t) return content;
-  return `# ${t}\n\n${content}`;
+  return `# ${escapeHeadingText(t)}\n\n${content}`;
 }

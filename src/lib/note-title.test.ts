@@ -75,6 +75,12 @@ describe('markdownWithTitle', () => {
     expect(markdownWithTitle('Plan', '\n\n# Plan\n\nbody')).toBe('\n\n# Plan\n\nbody');
   });
 
+  test('escapes Markdown syntax in the title so the heading shows it literally', () => {
+    expect(markdownWithTitle('Plan #', 'body')).toBe('# Plan \\#\n\nbody');
+    expect(markdownWithTitle('*draft* [v2]', 'body')).toBe('# \\*draft\\* \\[v2\\]\n\nbody');
+    expect(markdownWithTitle('Q3-plan', 'body')).toBe('# Q3-plan\n\nbody');
+  });
+
   test('keeps the title when the opening heading differs', () => {
     expect(markdownWithTitle('Plan', '# Other\n\nbody')).toBe('# Plan\n\n# Other\n\nbody');
   });
