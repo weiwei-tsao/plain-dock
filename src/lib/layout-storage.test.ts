@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { pickInitialSelection, selectionFromSearch, selectionToSearch } from '@/lib/layout-storage';
+import {
+  pickInitialSelection,
+  selectionFromSearch,
+  selectionHref,
+  selectionToSearch,
+} from '@/lib/layout-storage';
 
 const notes = [
   { id: 'pinned', folderId: null },
@@ -54,6 +59,12 @@ describe('selection URL params', () => {
   it('omits empty parts', () => {
     expect(selectionToSearch({ folderId: null, noteId: 'a1' })).toBe('?note=a1');
     expect(selectionToSearch({ folderId: null, noteId: null })).toBe('');
+  });
+
+  it('builds links for a note, a note in a folder, and a folder', () => {
+    expect(selectionHref({ folderId: null, noteId: 'a1' })).toBe('/?note=a1');
+    expect(selectionHref({ folderId: 'A', noteId: 'a1' })).toBe('/?folder=A&note=a1');
+    expect(selectionHref({ folderId: 'A', noteId: null })).toBe('/?folder=A');
   });
 
   it('returns null for a bare URL so the caller can fall back', () => {

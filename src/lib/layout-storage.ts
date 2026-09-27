@@ -92,6 +92,11 @@ export function selectionToSearch({ folderId, noteId }: StoredSelection): string
   return search ? `?${search}` : '';
 }
 
+/** Link to a selection, so notes/folders can be opened in a new tab. */
+export function selectionHref(selection: StoredSelection): string {
+  return `/${selectionToSearch(selection)}`;
+}
+
 /** Restore the saved selection if it still exists; otherwise fall back to the first note in scope. */
 export function pickInitialSelection(
   notes: { id: string; folderId: string | null }[],

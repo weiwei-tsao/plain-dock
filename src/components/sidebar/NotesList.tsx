@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Note } from '@/types';
 import { Search, Plus, Pin, Loader2, PanelLeft } from 'lucide-react';
+import { selectionHref } from '@/lib/layout-storage';
 import { deriveTitleFromText } from '@/lib/note-title';
 import { getContextSnippet, highlightMatch } from '@/lib/search-highlight';
 
@@ -161,10 +162,16 @@ const NotesList: React.FC<NotesListProps> = ({
               const { title, preview } = displayParts(note);
               const previewSnippet = preview ? getContextSnippet(preview, searchQuery) : '';
               return (
-                <button
+                // A real link so right-click / Cmd-click / middle-click open the note in a new tab
+                <a
                   key={note.id}
-                  onClick={() => onSelectNote(note.id)}
-                  className={`group relative w-full rounded-lg p-4 text-left transition-all md:p-3 ${
+                  href={selectionHref({ folderId: activeFolderId, noteId: note.id })}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                    e.preventDefault();
+                    onSelectNote(note.id);
+                  }}
+                  className={`group relative block w-full rounded-lg p-4 text-left transition-all md:p-3 ${
                     activeNoteId === note.id
                       ? 'bg-zinc-800 text-white'
                       : 'text-zinc-400 hover:bg-zinc-900'
@@ -191,7 +198,7 @@ const NotesList: React.FC<NotesListProps> = ({
                       })}
                     </span>
                   </div>
-                </button>
+                </a>
               );
             })}
           </div>
