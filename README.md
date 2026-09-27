@@ -10,7 +10,8 @@ A self-hosted, minimalist dual-mode note-taking app. Each note operates in **PLA
 - **Plain-text paste** — pasted content is always inserted as plain text; clipboard HTML is intentionally ignored
 - **Auto-save** — 1-second debounced saves with a sequential request queue to prevent race conditions
 - **Pin & search** — pin notes to the top; search filters by title and text content simultaneously
-- **Copy & export** — copy note text to clipboard; export as `.txt` or `.md`
+- **Copy & download** — copy a note's Markdown to the clipboard; download it as a `.md` file with the title as an `# H1` heading
+- **Tabs & links** — each tab keeps its folder/note in the URL, so reloads restore it; right-click (or Cmd/Ctrl/middle-click) a note or folder to open it in a new tab; lists refresh when you switch back to a window
 - **Mobile-responsive** — stacked single-panel layout on phones (< 768px), narrower sidebar on tablet (768–1023px), full layout on desktop (1024px+)
 - **Collapsible sidebar** — collapse/expand on tablet and desktop; hidden on phone via back-button navigation
 - **Password-protected** — single shared password with JWT session cookies (httpOnly, 30-day expiry)
