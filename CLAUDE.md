@@ -76,7 +76,7 @@ Vitest is the test runner (`vitest.config.ts`). Test files live alongside the co
 - `src/lib/db.ts` - Singleton PrismaClient. Uses file SQLite for `DATABASE_URL=file:...` with WAL mode enabled; uses Turso/libSQL adapter for `DATABASE_URL=libsql://...` or `https://...`. Imports `server-only`.
 - `src/lib/auth.ts` — JWT sign/verify using `jsonwebtoken`. Imports `server-only`.
 - `src/lib/serialize.ts` — Converts Prisma `Note` (with Date fields) to the client `Note` type (with ISO string dates). Imports `server-only`.
-- `src/middleware.ts` — Protects all routes except `/login` and `/api/auth`. Runs in Edge Runtime so does lightweight JWT structure+expiry check only (full crypto verification happens in API routes).
+- `src/middleware.ts` — Protects all routes except `/login` and `/api/auth`. Runs in Edge Runtime and fully verifies the JWT (structure, `exp`, and HMAC-SHA256 signature via Web Crypto `crypto.subtle`) — API routes don't re-verify. Unauthenticated API requests get 401 JSON; pages redirect to `/login`.
 - `src/app/api/auth/login/route.ts` — POST: validates `APP_PASSWORD`, sets httpOnly JWT cookie.
 - `src/app/api/auth/logout/route.ts` — POST: clears the session cookie.
 - `src/app/api/notes/route.ts` — GET: lists notes (content field omitted for lightweight response). POST: creates empty note.
