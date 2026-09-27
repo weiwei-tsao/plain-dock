@@ -330,7 +330,7 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(displayText);
+      await navigator.clipboard.writeText(content);
       setToast({ message: 'Copied!', variant: 'success' });
     } catch {
       setToast({ message: 'Clipboard access denied.', variant: 'error' });
@@ -607,7 +607,8 @@ const EditorCanvas = forwardRef<EditorCanvasHandle, EditorCanvasProps>(function 
             <button
               onClick={copyToClipboard}
               className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
-              title="Copy"
+              title="Copy Markdown"
+              aria-label="Copy Markdown"
             >
               <Copy className="h-4 w-4" />
             </button>
