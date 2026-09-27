@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickInitialSelection } from '@/lib/layout-storage';
+import { pickInitialSelection, selectionFromSearch, selectionToSearch } from '@/lib/layout-storage';
 
 const notes = [
   { id: 'pinned', folderId: null },
@@ -42,5 +42,22 @@ describe('pickInitialSelection', () => {
       folderId: 'B',
       noteId: null,
     });
+  });
+});
+
+describe('selection URL params', () => {
+  it('round-trips folder and note', () => {
+    const selection = { folderId: 'A', noteId: 'a1' };
+    expect(selectionFromSearch(selectionToSearch(selection))).toEqual(selection);
+  });
+
+  it('omits empty parts', () => {
+    expect(selectionToSearch({ folderId: null, noteId: 'a1' })).toBe('?note=a1');
+    expect(selectionToSearch({ folderId: null, noteId: null })).toBe('');
+  });
+
+  it('returns null for a bare URL so the caller can fall back', () => {
+    expect(selectionFromSearch('')).toBeNull();
+    expect(selectionFromSearch('?other=1')).toBeNull();
   });
 });

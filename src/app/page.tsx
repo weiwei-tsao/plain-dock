@@ -16,6 +16,8 @@ import {
   getLastSelection,
   saveLastSelection,
   pickInitialSelection,
+  selectionFromSearch,
+  selectionToSearch,
 } from '@/lib/layout-storage';
 
 const sortNotes = (list: Note[]): Note[] =>
@@ -214,6 +216,7 @@ export default function MainPage() {
   const activeNoteIdRef = useRef(activeNoteId);
   activeNoteIdRef.current = activeNoteId;
 
+  // Selection lives in the URL (per tab, survives reload); localStorage only seeds a bare `/`.
   // Don't persist the empty initial selection over the saved one before it's restored.
   const selectionRestoredRef = useRef(false);
 
@@ -223,7 +226,8 @@ export default function MainPage() {
       if (cancelled) return;
       selectionRestoredRef.current = true;
       if (activeNoteIdRef.current) return;
-      const { folderId, noteId } = pickInitialSelection(noteData, folderData, getLastSelection());
+      const saved = selectionFromSearch(window.location.search) ?? getLastSelection();
+      const { folderId, noteId } = pickInitialSelection(noteData, folderData, saved);
       setActiveFolderId(folderId);
       if (!noteId) return;
       setActiveNoteId(noteId);
@@ -236,8 +240,32 @@ export default function MainPage() {
 
   useEffect(() => {
     if (!selectionRestoredRef.current) return;
-    saveLastSelection({ folderId: activeFolderId, noteId: activeNoteId });
+    const selection = { folderId: activeFolderId, noteId: activeNoteId };
+    saveLastSelection(selection);
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${selectionToSearch(selection)}`,
+    );
   }, [activeFolderId, activeNoteId]);
+
+  // Another tab may have changed notes/folders. Side-by-side windows stay "visible", so
+  // `focus` catches switching windows and `visibilitychange` catches switching tabs/apps.
+  // Only the lists refresh — the open note is left alone so in-progress edits aren't
+  // disturbed (same-note conflicts: #51).
+  useEffect(() => {
+    const refreshLists = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadNotes().catch(() => {});
+      loadFolders().catch(() => {});
+    };
+    window.addEventListener('focus', refreshLists);
+    document.addEventListener('visibilitychange', refreshLists);
+    return () => {
+      window.removeEventListener('focus', refreshLists);
+      document.removeEventListener('visibilitychange', refreshLists);
+    };
+  }, [loadNotes, loadFolders]);
 
   // Fetch full note (with content) when selection changes
   useEffect(() => {

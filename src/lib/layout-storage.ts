@@ -76,6 +76,22 @@ export function saveLastSelection(selection: StoredSelection): void {
   }
 }
 
+/** `?folder=…&note=…` → selection; null when the URL carries neither, so callers can fall back. */
+export function selectionFromSearch(search: string): StoredSelection | null {
+  const params = new URLSearchParams(search);
+  const folderId = params.get('folder');
+  const noteId = params.get('note');
+  return folderId || noteId ? { folderId, noteId } : null;
+}
+
+export function selectionToSearch({ folderId, noteId }: StoredSelection): string {
+  const params = new URLSearchParams();
+  if (folderId) params.set('folder', folderId);
+  if (noteId) params.set('note', noteId);
+  const search = params.toString();
+  return search ? `?${search}` : '';
+}
+
 /** Restore the saved selection if it still exists; otherwise fall back to the first note in scope. */
 export function pickInitialSelection(
   notes: { id: string; folderId: string | null }[],
